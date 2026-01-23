@@ -1,62 +1,79 @@
-import random
+import joblib
+import os
 import re
+import numpy as np
 
 class PhishingModel:
     def __init__(self):
-        # In a real scenario, we would load a pickle file here
-        # self.model = joblib.load('model.pkl')
-        print("Model initialized (Heuristic Mode)")
+        self.model = None
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(current_dir, 'phishing_model.pkl')
+        
+        try:
+            if os.path.exists(model_path):
+                self.model = joblib.load(model_path)
+                print(f"Model loaded successfully from {model_path}")
+            else:
+                print(f"Warning: {model_path} not found. Running in Fallback Mode.")
+        except Exception as e:
+            print(f"Error loading model: {e}")
+
+    def extract_features(self, url):
+        features = []
+        # 1. Length of URL
+        features.append(len(url))
+        # 2. Count of dots
+        features.append(url.count('.'))
+        # 3. Count of hyphens
+        features.append(url.count('-'))
+        # 4. Count of special chars
+        features.append(url.count('@'))
+        features.append(url.count('//'))
+        # 5. Has IP address?
+        ip_pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+        features.append(1 if re.search(ip_pattern, url) else 0)
+        # 6. Has HTTP (insecure)?
+        features.append(1 if 'https' not in url else 0)
+        return features
 
     def predict(self, url: str):
-        """
-        Returns (status, confidence)
-        status: 'safe', 'suspicious', 'phishing'
-        confidence: 0-100
-        """
         url_lower = url.lower()
 
-        # heuristic 1: Known bad patterns
-        phishing_keywords = ['login', 'verify', 'account', 'secure', 'bank', 'confirm']
-        
-        # Check against a small mock blacklist
-        blacklist = ['evil.com', 'phishing-test.com', 'fake-login.com']
-        for bad in blacklist:
-            if bad in url_lower:
-                return 'phishing', 99
-
-        # heuristic 0: Known Good Domains (Allowlist)
-        # Prevent false positives for long search URLs etc.
-        allowlist = ['google.com', 'gmail.com', 'youtube.com', 'facebook.com', 'amazon.com', 'wikipedia.org', 'chatgpt.com', 'openai.com']
+        # 0. Allowlist (Hardware bypass for speed and safety)
+        allowlist = ['google.com', 'gmail.com', 'youtube.com', 'facebook.com', 'amazon.com', 'wikipedia.org', 'chatgpt.com', 'openai.com', 'github.com', 'render.com']
         from urllib.parse import urlparse
         try:
             domain = urlparse(url).netloc
-            # Handle www. prefix
-            if domain.startswith('www.'):
-                domain = domain[4:]
-            
+            if domain.startswith('www.'): domain = domain[4:]
             if domain in allowlist or domain.endswith('.google.com'):
-                return 'safe', 98
+                return 'safe', 99
         except:
             pass
 
-        # Heuristic 2: Suspicious TLDs or excessive length
-        if len(url) > 75:
-            return 'suspicious', 70
-        
-        # Heuristic 3: Keywords in non-standard domains
-        # e.g. "google" in "google-secure-login.xyz"
-        score = 0
+        # 1. Use ML Model if available
+        if self.model:
+            try:
+                features = np.array([self.extract_features(url)])
+                prediction = self.model.predict(features)[0]
+                # In our training: 0=Safe, 1=Phishing
+                if prediction == 1:
+                    # Get probability if supported
+                    try:
+                        probs = self.model.predict_proba(features)[0]
+                        confidence = int(probs[1] * 100)
+                    except:
+                        confidence = 90
+                    return 'phishing', confidence
+                else:
+                     return 'safe', 95
+            except Exception as e:
+                print(f"Prediction Error: {e}")
+                # Fallthrough to heuristic
+
+        # 2. Heuristic Fallback (Simple Keywords)
+        phishing_keywords = ['login', 'verify', 'account', 'secure', 'bank', 'confirm']
         for kw in phishing_keywords:
             if kw in url_lower:
-                score += 20
-        
-        if score > 40:
-             return 'suspicious', 60 + int(random.random() * 20)
+                return 'suspicious', 70
 
-        # Heuristic 4: IP address in URL
-        ip_pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
-        if re.search(ip_pattern, url):
-             return 'phishing', 85
-
-        # Default safe
-        return 'safe', 95 + int(random.random() * 5)
+        return 'safe', 80

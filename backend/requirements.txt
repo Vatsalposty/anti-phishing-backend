@@ -5,3 +5,5 @@ pydantic
 scikit-learn
 firebase-admin
 beautifulsoup4
+pandas
+joblib

@@ -1,6 +1,6 @@
 // Background Service Worker
 
-const BACKEND_URL = "http://127.0.0.1:8000/analyze"; // Python Backend
+const BACKEND_URL = "https://anti-phishing-api.onrender.com/analyze"; // Render Cloud Backend
 const tabStatus = new Map(); // Store status per tabId
 
 // Listen for tab updates
