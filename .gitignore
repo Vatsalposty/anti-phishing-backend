@@ -1,0 +1,12 @@
+# Python / Backend
+backend/venv/
+backend/__pycache__/
+*.pyc
+backend/serviceAccountKey.json
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

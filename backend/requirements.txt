@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+requests
+pydantic
+scikit-learn
+firebase-admin
+beautifulsoup4
