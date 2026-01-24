@@ -7,26 +7,6 @@ import uvicorn
 import logging
 from contextlib import asynccontextmanager
 
-# ... (Logging setup) ...
-
-# ... (Previous Models) ...
-
-class ReportRequest(BaseModel):
-    url: str
-    reason: str = "user_report"
-
-# ... (Existing endpoints) ...
-
-@app.post("/report")
-def report_url(request: ReportRequest):
-    logger.info(f"User Report Received: {request.url}")
-    try:
-        log_user_report(request.url, request.reason)
-        return {"status": "success", "message": "Report logged"}
-    except Exception as e:
-        logger.error(f"Error logging report: {e}")
-        raise HTTPException(status_code=500, detail="Failed to log report")
-
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,6 +33,7 @@ app.add_middleware(
 # Load Model
 model = PhishingModel()
 
+# --- Pydantic Models ---
 class AnalyzeRequest(BaseModel):
     url: str
     features: dict = None
@@ -61,6 +42,12 @@ class AnalyzeResponse(BaseModel):
     url: str
     status: str # "safe", "phishing", "suspicious"
     confidence: int # 0-100
+
+class ReportRequest(BaseModel):
+    url: str
+    reason: str = "user_report"
+
+# --- Endpoints ---
 
 @app.get("/")
 def read_root():
@@ -89,6 +76,16 @@ def analyze_url(request: AnalyzeRequest):
     except Exception as e:
         logger.error(f"Error analyzing URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/report")
+def report_url(request: ReportRequest):
+    logger.info(f"User Report Received: {request.url}")
+    try:
+        log_user_report(request.url, request.reason)
+        return {"status": "success", "message": "Report logged"}
+    except Exception as e:
+        logger.error(f"Error logging report: {e}")
+        raise HTTPException(status_code=500, detail="Failed to log report")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
