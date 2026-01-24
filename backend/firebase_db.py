@@ -81,7 +81,6 @@ def log_user_report(url, reason="user_report"):
         return
 
     try:
-    try:
         # Use URL hash to separate unique reports
         doc_id = hashlib.md5(url.encode('utf-8')).hexdigest()
         doc_ref = db.collection('user_reports').document(doc_id)
