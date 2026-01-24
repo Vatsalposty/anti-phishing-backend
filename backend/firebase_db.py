@@ -81,13 +81,18 @@ def log_user_report(url, reason="user_report"):
         return
 
     try:
-        doc_ref = db.collection('user_reports').document()
+    try:
+        # Use URL hash to separate unique reports
+        doc_id = hashlib.md5(url.encode('utf-8')).hexdigest()
+        doc_ref = db.collection('user_reports').document(doc_id)
+        
         doc_ref.set({
             'url': url,
             'reason': reason,
-            'timestamp': datetime.datetime.now(),
-            'status': 'pending_review'
-        })
-        print(f"Logged User Report: {url}")
+            'last_reported': datetime.datetime.now(),
+            'status': 'pending_review',
+            'report_count': firestore.Increment(1)
+        }, merge=True)
+        print(f"Logged/Updated User Report: {url}")
     except Exception as e:
         print(f"Error writing User Report to Firestore: {e}")
