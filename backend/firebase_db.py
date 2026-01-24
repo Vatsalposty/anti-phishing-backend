@@ -36,20 +36,26 @@ try:
 except Exception as e:
     print(f"Error initializing Firebase: {e}")
 
+import hashlib
+
 def log_attempt(url, status, confidence):
     if not db:
         print(f"[MOCK-FIREBASE] Logged: {url} | {status} | {confidence}%")
         return
 
     try:
-        doc_ref = db.collection('phishing_attempts').document()
+        # Use URL hash as distinct ID to avoid duplicates
+        doc_id = hashlib.md5(url.encode('utf-8')).hexdigest()
+        doc_ref = db.collection('phishing_attempts').document(doc_id)
+        
         doc_ref.set({
             'url': url,
             'status': status,
             'confidence': confidence,
-            'timestamp': datetime.datetime.now()
-        })
-        print(f"Logged to Firebase: {url}")
+            'last_seen': datetime.datetime.now(),
+            'count': firestore.Increment(1)
+        }, merge=True)
+        print(f"Logged/Updated Firebase: {url}")
     except Exception as e:
         print(f"Error writing to Firestore: {e}")
 
