@@ -1,39 +1,64 @@
-# Anti-Phishing Browser Extension (AI-Powered)
+# 🛡️ Anti-Phishing AI Guard
 
-## Project Overview
-This project contains a Chrome Extension and a Python Backend to detect phishing websites in real-time.
+![License](https://img.shields.io/badge/license-MIT-blue.svg) ![Python](https://img.shields.io/badge/python-3.8+-blue.svg) ![FastAPI](https://img.shields.io/badge/FastAPI-0.68+-green.svg) ![Extension](https://img.shields.io/badge/Chrome-Extension-orange.svg)
 
-## Structure
-- `/extension`: Contains the Chrome Extension source code.
-- `/backend`: Contains the Python FastAPI server and ML logic.
+**Anti-Phishing AI Guard** is a real-time browser extension that protects users from malicious websites using advanced machine learning and heuristic analysis. It detects zero-day phishing attacks that traditional blacklists miss.
 
-## Setup Instructions
+## 🚀 Features
 
-### 1. Backend Setup
-1. Open a terminal in `e:\anti_phishing_extension\backend`.
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Run the server:
-   ```bash
-   uvicorn main:app --reload
-   ```
-   The API will be available at `http://localhost:8000`.
+*   **Real-Time Scanning**: Analyzes every URL you visit instantly.
+*   **AI-Powered Detection**: Uses a Random Forest classifier trained on thousands of phishing URLs to detect suspicious patterns.
+*   **Heuristic Fallback**: Instantly blocks known bad keywords and IP-based URLs.
+*   **Visual Protection**: Displays a verified "Safe" shield or a "Phishing Alert" warning.
+*   **User Reporting**: One-click reporting mechanism to flag suspicious sites for review.
+*   **Cloud Backend**: Powered by a robust Python FastAPI server hosted on Render.
 
-### 2. Extension Setup
-1. Open Google Chrome.
-2. Go to `chrome://extensions`.
-3. Enable **Developer Mode** (toggle in top right).
-4. Click **Load unpacked**.
-5. Select the `e:\anti_phishing_extension\extension` folder.
-6. The extension icon should appear in your toolbar.
+## 🛠️ Architecture
 
-### 3. Usage
-- Browse the web. The extension icon will automatically change:
-  - 🟢 **Green Shield**: Safe Website
-  - 🟠 **Yellow/Red Shield**: Suspicious/Phishing Website
-- Click the extension icon to see detailed status.
+*   **Frontend**: Chrome Extension (Manifest V3), JavaScript, HTML/CSS.
+*   **Backend**: Python (FastAPI), Uvicorn.
+*   **AI Model**: Scikit-Learn (Random Forest) serialized with Joblib.
+*   **Database**: Google Firebase (Firestore) for logging attacks and user reports.
 
-## Configuration
-- **Firebase**: To enable real logging, place your `serviceAccountKey.json` from Firebase Console into the `backend/` folder. Default is Mock Mode.
+## 📦 Installation
+
+1.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/Vatsalposty/anti-phishing-backend.git
+    cd anti-phishing-backend
+    ```
+
+2.  **Load the Extension**:
+    *   Open `chrome://extensions` in Google Chrome.
+    *   Enable **Developer Mode** (top right).
+    *   Click **Load Unpacked**.
+    *   Select the `extension` folder from this repository.
+
+3.  **Start Browsing**:
+    *   The extension is pre-configured to use the cloud backend.
+    *   Visit any website to see the protection status!
+
+## 🔧 Local Development (Optional)
+
+If you want to run the backend locally:
+
+1.  **Install Dependencies**:
+    ```bash
+    cd backend
+    pip install -r requirements.txt
+    ```
+
+2.  **Run Server**:
+    ```bash
+    uvicorn main:app --reload
+    ```
+
+3.  **Update Extension**: Change `API_URL` in `extension/background.js` to `http://127.0.0.1:8000`.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
+## 📜 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

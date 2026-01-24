@@ -50,11 +50,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('report-btn').addEventListener('click', async () => {
         const btn = document.getElementById('report-btn');
-        const urlText = document.getElementById('current-url').textContent;
-        // Construct full URL roughly or rely on tab.url
-        // Ideally we grab the full URL from the 'tab' object we used earlier, but scopes differ.
-        // Let's re-query or use a global var? 
-        // Better: We query active tab again inside click handler to be safe.
 
         try {
             const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -63,28 +58,30 @@ document.addEventListener('DOMContentLoaded', async () => {
             btn.innerHTML = '<span>Reporting...</span>';
             btn.disabled = true;
 
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
             const response = await fetch('https://anti-phishing-api.onrender.com/report', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: activeTab.url, reason: "user_manual_report" })
+                body: JSON.stringify({ url: activeTab.url, reason: "user_manual_report" }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (response.ok) {
                 btn.innerHTML = '<span>Reported! ✅</span>';
-                setTimeout(() => {
-                    btn.innerHTML = '<span>Report Suspicious</span>';
-                    btn.disabled = false;
-                }, 2000);
             } else {
-                throw new Error('Failed to report');
+                throw new Error('Server error');
             }
         } catch (e) {
             console.error("Report failed", e);
-            btn.innerHTML = '<span>Error ❌</span>';
+            btn.innerHTML = '<span>Offline ❌</span>';
+        } finally {
             setTimeout(() => {
                 btn.innerHTML = '<span>Report Suspicious</span>';
                 btn.disabled = false;
-            }, 2000);
+            }, 3000);
         }
     });
 });
