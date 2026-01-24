@@ -68,3 +68,20 @@ def log_system_event(event_type, details):
         print(f"Logged System Event: {event_type}")
     except Exception as e:
         print(f"Error writing System Event to Firestore: {e}")
+
+def log_user_report(url, reason="user_report"):
+    if not db:
+        print(f"[MOCK-FIREBASE] User Report: {url} | {reason}")
+        return
+
+    try:
+        doc_ref = db.collection('user_reports').document()
+        doc_ref.set({
+            'url': url,
+            'reason': reason,
+            'timestamp': datetime.datetime.now(),
+            'status': 'pending_review'
+        })
+        print(f"Logged User Report: {url}")
+    except Exception as e:
+        print(f"Error writing User Report to Firestore: {e}")

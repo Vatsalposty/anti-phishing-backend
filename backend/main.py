@@ -2,10 +2,30 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from model import PhishingModel
-from firebase_db import log_attempt, log_system_event
+from firebase_db import log_attempt, log_system_event, log_user_report
 import uvicorn
 import logging
 from contextlib import asynccontextmanager
+
+# ... (Logging setup) ...
+
+# ... (Previous Models) ...
+
+class ReportRequest(BaseModel):
+    url: str
+    reason: str = "user_report"
+
+# ... (Existing endpoints) ...
+
+@app.post("/report")
+def report_url(request: ReportRequest):
+    logger.info(f"User Report Received: {request.url}")
+    try:
+        log_user_report(request.url, request.reason)
+        return {"status": "success", "message": "Report logged"}
+    except Exception as e:
+        logger.error(f"Error logging report: {e}")
+        raise HTTPException(status_code=500, detail="Failed to log report")
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
