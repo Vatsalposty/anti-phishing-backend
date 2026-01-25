@@ -91,8 +91,12 @@ def train():
     print(f"Model Accuracy: {acc * 100:.2f}%")
     
     # Save
-    print("Saving model to phishing_model.pkl...")
-    joblib.dump(model, 'phishing_model.pkl')
+    # Save
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(current_dir, 'phishing_model.pkl')
+    print(f"Saving model to {model_path}...")
+    joblib.dump(model, model_path)
     print("Done!")
 
 if __name__ == "__main__":

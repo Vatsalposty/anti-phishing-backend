@@ -24,8 +24,24 @@ class PhishingModel:
                 print(f"Warning: {model_path} not found. Running in Fallback Mode.")
                 print(f"Directory contents: {os.listdir(current_dir)}")
         except Exception as e:
-            print(f"Error loading model: {e}")
+            print(f"Error loading model: {repr(e)}")
             traceback.print_exc()
+            
+            # --- Self-Healing: Attempt to Retrain on Server ---
+            print("Attempting to Retrain Model on Server...")
+            try:
+                from train_model import train
+                train() # This will save to 'phishing_model.pkl' in the same directory
+                
+                if os.path.exists(model_path):
+                     print(f"Model Retrained. Size: {os.path.getsize(model_path)} bytes. Reloading...")
+                     self.model = joblib.load(model_path)
+                     print("Model Reloaded Successfully!")
+                else:
+                    print("Retraining finished but model file not found.")
+            except Exception as re_e:
+                print(f"Retraining Failed: {re_e}")
+                traceback.print_exc()
 
     def extract_features(self, url):
         features = []
