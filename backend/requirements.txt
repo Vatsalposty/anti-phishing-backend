@@ -2,8 +2,9 @@ fastapi
 uvicorn
 requests
 pydantic
-scikit-learn
+scikit-learn==1.8.0
 firebase-admin
 beautifulsoup4
-pandas
-joblib
+pandas==3.0.0
+joblib==1.5.3
+numpy==2.4.1

@@ -11,6 +11,11 @@ class PhishingModel:
         model_path = os.path.join(current_dir, 'phishing_model.pkl')
         
         try:
+            import sklearn
+            print(f"DEBUG: scikit-learn version: {sklearn.__version__}")
+            print(f"DEBUG: joblib version: {joblib.__version__}")
+            print(f"DEBUG: numpy version: {np.__version__}")
+
             if os.path.exists(model_path):
                 print(f"Loading model from {model_path} (Size: {os.path.getsize(model_path)} bytes)")
                 self.model = joblib.load(model_path)
