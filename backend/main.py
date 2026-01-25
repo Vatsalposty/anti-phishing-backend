@@ -30,6 +30,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def health_check():
+    return {"status": "active", "service": "Anti-Phishing Backend"}
+
 # Load Model
 model = PhishingModel()
 

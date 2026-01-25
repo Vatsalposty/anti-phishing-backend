@@ -22,25 +22,35 @@ class PhishingModel:
                 print(f"Model loaded successfully from {model_path}")
             else:
                 print(f"Warning: {model_path} not found. Running in Fallback Mode.")
-                print(f"Directory contents: {os.listdir(current_dir)}")
+    print(f"Directory contents: {os.listdir(current_dir)}")
         except Exception as e:
-            print(f"Error loading model: {repr(e)}")
+            print(f"Error loading model: {repr(e)}", flush=True)
             traceback.print_exc()
             
             # --- Self-Healing: Attempt to Retrain on Server ---
-            print("Attempting to Retrain Model on Server...")
+            print("Attempting to Retrain Model on Server (Self-Healing)...", flush=True)
+            
+            # Delete the corrupted file if it exists to prevent repeat errors
+            if os.path.exists(model_path):
+                try:
+                    os.remove(model_path)
+                    print("Deleted corrupted model file.", flush=True)
+                except:
+                    pass
+
             try:
                 from train_model import train
-                train() # This will save to 'phishing_model.pkl' in the same directory
+                # Train with fewer samples for speed (500 instead of 2000)
+                train(n_samples=500) 
                 
                 if os.path.exists(model_path):
-                     print(f"Model Retrained. Size: {os.path.getsize(model_path)} bytes. Reloading...")
+                     print(f"Model Retrained. Size: {os.path.getsize(model_path)} bytes. Reloading...", flush=True)
                      self.model = joblib.load(model_path)
-                     print("Model Reloaded Successfully!")
+                     print("Model Reloaded Successfully!", flush=True)
                 else:
-                    print("Retraining finished but model file not found.")
+                    print("Retraining finished but model file not found.", flush=True)
             except Exception as re_e:
-                print(f"Retraining Failed: {re_e}")
+                print(f"Retraining Failed: {re_e}", flush=True)
                 traceback.print_exc()
 
     def extract_features(self, url):

@@ -70,8 +70,8 @@ def extract_features(url):
     return features
 
 # --- 3. Training ---
-def train():
-    df = generate_dataset()
+def train(n_samples=2000):
+    df = generate_dataset(n=n_samples)
     
     print("Extracting features...")
     X = np.array([extract_features(url) for url in df['url']])
