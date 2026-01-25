@@ -2,6 +2,7 @@ import joblib
 import os
 import re
 import numpy as np
+import traceback
 
 class PhishingModel:
     def __init__(self):
@@ -11,12 +12,15 @@ class PhishingModel:
         
         try:
             if os.path.exists(model_path):
+                print(f"Loading model from {model_path} (Size: {os.path.getsize(model_path)} bytes)")
                 self.model = joblib.load(model_path)
                 print(f"Model loaded successfully from {model_path}")
             else:
                 print(f"Warning: {model_path} not found. Running in Fallback Mode.")
+                print(f"Directory contents: {os.listdir(current_dir)}")
         except Exception as e:
             print(f"Error loading model: {e}")
+            traceback.print_exc()
 
     def extract_features(self, url):
         features = []
