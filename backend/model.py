@@ -22,7 +22,7 @@ class PhishingModel:
                 print(f"Model loaded successfully from {model_path}")
             else:
                 print(f"Warning: {model_path} not found. Running in Fallback Mode.")
-    print(f"Directory contents: {os.listdir(current_dir)}")
+                print(f"Directory contents: {os.listdir(current_dir)}")
         except Exception as e:
             print(f"Error loading model: {repr(e)}", flush=True)
             traceback.print_exc()
