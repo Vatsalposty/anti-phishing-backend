@@ -3,7 +3,7 @@ backend/venv/
 backend/__pycache__/
 *.pyc
 backend/serviceAccountKey.json
-backend/phishing_model.pkl
+
 
 # VS Code
 .vscode/
