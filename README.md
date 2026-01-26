@@ -13,12 +13,28 @@
 *   **User Reporting**: One-click reporting mechanism to flag suspicious sites for review.
 *   **Cloud Backend**: Powered by a robust Python FastAPI server hosted on Render.
 
-## 🛠️ Architecture
+## 🛠️ How It Works (Architecture)
 
+The extension follows a privacy-preserving, 3-step security check:
+
+1.  **Analyze (Extension)**: 
+    *   When you visit a URL, `background.js` checks if it's on your local **Whitelist**.
+    *   If not, it sends the URL to the secure Backend API.
+
+2.  **Verify & Detect (Backend)**:
+    *   **Step 1 - PhishTank**: Checked against verified global phishing database for 100% accuracy.
+    *   **Step 2 - ML Model**: If unknown, the AI (Random Forest) analyzes the URL structure (length, entropy, TLD, special chars) to predict if it's malicious.
+    *   **Step 3 - Heuristics**: Checks for obvious keywords like `secure-login-apple`.
+
+3.  **Protect (Action)**:
+    *   **Safe**: The extension badge turns **Green (OK)**.
+    *   **Phishing**: The extension badge turns **Red (!)** and a full-screen **Blocking Overlay** prevents you from interacting with the dangerous site.
+
+### Tech Stack
 *   **Frontend**: Chrome Extension (Manifest V3), JavaScript, HTML/CSS.
-*   **Backend**: Python (FastAPI), Uvicorn.
-*   **AI Model**: Scikit-Learn (Random Forest) serialized with Joblib.
-*   **Database**: Google Firebase (Firestore) for logging attacks and user reports.
+*   **Backend**: Python (FastAPI) hosted on Render.
+*   **AI Engine**: Scikit-Learn (Random Forest) trained on 11k+ real-world Dataset.
+*   **Database**: Google Firebase (Firestore) for logging attacks.
 
 ## 📦 Installation
 

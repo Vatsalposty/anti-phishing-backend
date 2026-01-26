@@ -140,6 +140,21 @@ class PhishingModel:
         if pt_result == 'phishing':
             return 'phishing', 100
 
+        # 0.6 Keyword Heuristics (Catch-all for 'secure-login' patterns the ML might miss)
+        # 1. High-risk phrases (often used in demos or blatant phishing)
+        high_risk_phrases = ['secure-login', 'verify-account', 'update-password', 'login-verify']
+        for phrase in high_risk_phrases:
+            if phrase in url_lower:
+                return 'phishing', 90
+        
+        # 2. Localhost/IP specific check for demos
+        is_local = 'localhost' in url_lower or '127.0.0.1' in url_lower
+        if is_local:
+            demo_keywords = ['login', 'verify', 'secure', 'account']
+            if any(k in url_lower for k in demo_keywords):
+                print(f"Demo Detection: Flagging local URL {url}")
+                return 'suspicious', 85
+
         # 1. Use ML Model if available
         if self.model:
             try:
