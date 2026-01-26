@@ -89,7 +89,7 @@ def report_url(request: ReportRequest):
         logger.error(f"Error logging report: {e}")
         raise HTTPException(status_code=500, detail="Failed to log report")
 
-@app.api_route("/stats", methods=["GET", "HEAD"])
+@app.api_route("/stats", methods=["GET", "HEAD", "POST", "OPTIONS"])
 def get_stats():
     # In a real app, this would fetch from Firestore
     # For now, we return mock/example stats
