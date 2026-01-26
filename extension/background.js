@@ -7,7 +7,7 @@ const tabStatus = new Map(); // Store status per tabId
 
 // Initialize settings
 chrome.storage.sync.get({ devMode: false }, (items) => {
-    if (items) {
+    if (items && items.devMode !== undefined) {
         BACKEND_URL = items.devMode ? DEV_URL : PROD_URL;
     }
 });
@@ -16,7 +16,7 @@ chrome.storage.sync.get({ devMode: false }, (items) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "settings_updated") {
         chrome.storage.sync.get({ devMode: false }, (items) => {
-            if (items) {
+            if (items && items.devMode !== undefined) {
                 BACKEND_URL = items.devMode ? DEV_URL : PROD_URL;
                 console.log("Backend URL updated to:", BACKEND_URL);
             }
@@ -29,23 +29,25 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url) {
         if (tab.url.startsWith('http')) {
             chrome.storage.sync.get({ protectionEnabled: true, whitelist: [] }, (items) => {
-                if (!items.protectionEnabled) {
-                    chrome.action.setBadgeText({ text: "OFF", tabId });
-                    chrome.action.setBadgeBackgroundColor({ color: "#555", tabId });
-                    return;
-                }
-
-                try {
-                    const hostname = new URL(tab.url).hostname.replace('www.', '');
-                    if (items.whitelist.includes(hostname)) {
-                        const result = { status: 'safe', confidence: 100 };
-                        tabStatus.set(tabId, result);
-                        updateBadge(tabId, 'safe');
+                if (items && items.protectionEnabled !== undefined) {
+                    if (!items.protectionEnabled) {
+                        chrome.action.setBadgeText({ text: "OFF", tabId });
+                        chrome.action.setBadgeBackgroundColor({ color: "#555", tabId });
                         return;
                     }
-                } catch (e) { }
 
-                analyzeUrl(tabId, tab.url);
+                    try {
+                        const hostname = new URL(tab.url).hostname.replace('www.', '');
+                        if (items.whitelist && items.whitelist.includes(hostname)) {
+                            const result = { status: 'safe', confidence: 100 };
+                            tabStatus.set(tabId, result);
+                            updateBadge(tabId, 'safe');
+                            return;
+                        }
+                    } catch (e) { }
+
+                    analyzeUrl(tabId, tab.url);
+                }
             });
         } else {
             // Mark internal pages (chrome://, about:, file://) as safe immediately
