@@ -1,4 +1,8 @@
 // Background Service Worker
+self.addEventListener('error', (event) => {
+    console.error('Service Worker Error:', event.error);
+});
+
 const PROD_URL = "https://anti-phishing-api.onrender.com/analyze";
 const DEV_URL = "http://localhost:8000/analyze";
 let BACKEND_URL = PROD_URL;

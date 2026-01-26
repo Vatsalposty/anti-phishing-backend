@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Anti-Phishing AI Guard",
-    "version": "1.2.5",
+    "version": "1.2.6",
     "description": "Premium AI-powered protection against phishing attacks.",
     "permissions": [
         "activeTab",
@@ -16,20 +16,18 @@
     },
     "action": {
         "default_popup": "popup/popup.html",
-        "default_icon": {
-            "16": "icons/icon.svg",
-            "48": "icons/icon.svg",
-            "128": "icons/icon.svg"
-        }
+        "16": "icons/icon16_v126.jpg",
+        "48": "icons/icon48_v126.jpg",
+        "128": "icons/icon128_v126.jpg"
     },
     "options_ui": {
         "page": "options/options.html",
         "open_in_tab": false
     },
     "icons": {
-        "16": "icons/icon.svg",
-        "48": "icons/icon.svg",
-        "128": "icons/icon.svg"
+        "16": "icons/icon16_v126.jpg",
+        "48": "icons/icon48_v126.jpg",
+        "128": "icons/icon128_v126.jpg"
     },
     "content_scripts": [
         {
