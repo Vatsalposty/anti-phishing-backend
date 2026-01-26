@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', restoreOptions);
 document.getElementById('toggle-protection').addEventListener('change', saveOptions);
+document.getElementById('toggle-dev-mode').addEventListener('change', saveOptions);
 document.getElementById('add-btn').addEventListener('click', addWhitelistItem);
 
 // Default settings
@@ -7,9 +8,11 @@ const DEFAULT_WHITELIST = ['google.com', 'gmail.com', 'youtube.com', 'facebook.c
 
 function saveOptions() {
     const protectionEnabled = document.getElementById('toggle-protection').checked;
+    const devMode = document.getElementById('toggle-dev-mode').checked;
 
     chrome.storage.sync.set({
-        protectionEnabled: protectionEnabled
+        protectionEnabled: protectionEnabled,
+        devMode: devMode
     }, () => {
         showToast();
         // Notify background script to update state
@@ -20,9 +23,11 @@ function saveOptions() {
 function restoreOptions() {
     chrome.storage.sync.get({
         protectionEnabled: true,
+        devMode: false,
         whitelist: DEFAULT_WHITELIST
     }, (items) => {
         document.getElementById('toggle-protection').checked = items.protectionEnabled;
+        document.getElementById('toggle-dev-mode').checked = items.devMode;
         renderWhitelist(items.whitelist);
     });
 }

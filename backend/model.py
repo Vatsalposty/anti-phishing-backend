@@ -1,8 +1,11 @@
-import joblib
 import os
 import re
+import requests
 import numpy as np
 import traceback
+import math
+from collections import Counter
+from urllib.parse import urlparse
 
 class PhishingModel:
     def __init__(self):
@@ -53,8 +56,19 @@ class PhishingModel:
                 print(f"Retraining Failed: {re_e}", flush=True)
                 traceback.print_exc()
 
+    def calculate_entropy(self, text):
+        if not text:
+            return 0
+        counter = Counter(text)
+        length = len(text)
+        entropy = -sum((count/length) * math.log2(count/length) for count in counter.values())
+        return entropy
+
     def extract_features(self, url):
         features = []
+        parsed = urlparse(url)
+        domain = parsed.netloc
+        
         # 1. Length of URL
         features.append(len(url))
         # 2. Count of dots
@@ -69,7 +83,42 @@ class PhishingModel:
         features.append(1 if re.search(ip_pattern, url) else 0)
         # 6. Has HTTP (insecure)?
         features.append(1 if 'https' not in url else 0)
+        
+        # --- NEW FEATURES ---
+        # 7. Domain Entropy (High entropy often means random/generated domains)
+        features.append(self.calculate_entropy(domain))
+        
+        # 8. TLD Analysis (suspicious TLDs like .top, .xyz, .buzz)
+        suspicious_tlds = ['.top', '.xyz', '.buzz', '.info', '.tk', '.ml', '.ga', '.cf', '.gq']
+        has_susp_tld = 1 if any(domain.endswith(tld) for tld in suspicious_tlds) else 0
+        features.append(has_susp_tld)
+        
         return features
+
+    def check_phishtank(self, url):
+        """Checks URL against PhishTank API (Free)"""
+        try:
+            # Note: For high volume, use an API key from PhishTank
+            api_url = "https://checkurl.phishtank.com/checkurl/"
+            data = {
+                'url': url,
+                'format': 'json',
+            }
+            # Use a descriptive user agent as requested by PhishTank
+            headers = {
+                'User-Agent': 'phishtank/anti-phishing-ai-guard-v1'
+            }
+            response = requests.post(api_url, data=data, headers=headers, timeout=5)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('results', {}).get('in_database'):
+                    if result['results']['verified']:
+                        print(f"PhishTank ALERT: {url} is a VERIFIED phishing site.")
+                        return 'phishing'
+            return None
+        except Exception as e:
+            print(f"PhishTank API Error: {e}")
+            return None
 
     def predict(self, url: str):
         url_lower = url.lower()
@@ -84,6 +133,11 @@ class PhishingModel:
                 return 'safe', 99
         except:
             pass
+
+        # 0.5 Check External DBs (PhishTank)
+        pt_result = self.check_phishtank(url)
+        if pt_result == 'phishing':
+            return 'phishing', 100
 
         # 1. Use ML Model if available
         if self.model:

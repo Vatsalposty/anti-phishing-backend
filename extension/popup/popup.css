@@ -33,8 +33,9 @@ body {
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: radial-gradient(circle at top right, rgba(35, 134, 54, 0.15), transparent 40%),
-        radial-gradient(circle at bottom left, rgba(88, 166, 255, 0.1), transparent 40%);
+    background: radial-gradient(circle at top right, rgba(35, 134, 54, 0.2), transparent 50%),
+        radial-gradient(circle at bottom left, rgba(88, 166, 255, 0.15), transparent 50%);
+    transition: background 0.5s ease;
 }
 
 header {
@@ -82,6 +83,7 @@ header {
 
 .status-card.safe {
     border-color: rgba(35, 134, 54, 0.3);
+    box-shadow: 0 0 20px rgba(35, 134, 54, 0.1);
 }
 
 .status-card.phishing {

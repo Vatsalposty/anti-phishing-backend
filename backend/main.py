@@ -91,5 +91,16 @@ def report_url(request: ReportRequest):
         logger.error(f"Error logging report: {e}")
         raise HTTPException(status_code=500, detail="Failed to log report")
 
+@app.get("/stats")
+def get_stats():
+    # In a real app, this would fetch from Firestore
+    # For now, we return mock/example stats
+    return {
+        "total_scans": 1245,
+        "threats_blocked": 87,
+        "system_status": "healthy",
+        "model_version": "2.1.0"
+    }
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

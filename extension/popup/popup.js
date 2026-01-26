@@ -28,6 +28,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                     console.log("No response yet, scanning...");
                 }
             });
+
+            // Fetch Local Stats (Total Blocked)
+            chrome.storage.local.get({ blockedCount: 0 }, (items) => {
+                const scanCountEl = document.getElementById('scan-count');
+                if (scanCountEl) scanCountEl.textContent = items.blockedCount;
+            });
+
+            // Fetch Global Stats from Backend
+            fetch('https://anti-phishing-api.onrender.com/stats')
+                .then(res => res.json())
+                .then(stats => {
+                    console.log("Global Stats:", stats);
+                    // We could use this for something cool in the UI later
+                })
+                .catch(err => console.log("Stats fetch failed (offline or localhost dev mode)"));
         } else {
             document.getElementById('current-url').textContent = "Restricted Page";
         }

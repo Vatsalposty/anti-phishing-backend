@@ -21,9 +21,12 @@ function showOverlay(type) {
     overlay.style.width = '100vw';
     overlay.style.height = '100vh';
     overlay.style.zIndex = '99999999';
-    overlay.style.backgroundColor = 'rgba(13, 17, 23, 0.95)'; // Dark
+    overlay.style.backgroundColor = 'rgba(13, 17, 23, 0.85)'; // Slightly more transparent
+    overlay.style.backdropFilter = 'blur(10px)'; // Premium blur effect
     overlay.style.color = 'white';
     overlay.style.display = 'flex';
+    overlay.style.opacity = '0'; // For transition
+    overlay.style.transition = 'opacity 0.5s ease-in-out';
     overlay.style.flexDirection = 'column';
     overlay.style.alignItems = 'center';
     overlay.style.justifyContent = 'center';
@@ -56,6 +59,9 @@ function showOverlay(type) {
     `;
 
     document.body.appendChild(overlay);
+
+    // Fade in
+    setTimeout(() => overlay.style.opacity = '1', 10);
 
     // Stop scrolling
     document.body.style.overflow = 'hidden';

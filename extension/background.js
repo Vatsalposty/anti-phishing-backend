@@ -1,7 +1,24 @@
 // Background Service Worker
+const PROD_URL = "https://anti-phishing-api.onrender.com/analyze";
+const DEV_URL = "http://localhost:8000/analyze";
+let BACKEND_URL = PROD_URL;
 
-const BACKEND_URL = "https://anti-phishing-api.onrender.com/analyze"; // Render Cloud Backend
 const tabStatus = new Map(); // Store status per tabId
+
+// Initialize settings
+chrome.storage.sync.get({ devMode: false }, (items) => {
+    BACKEND_URL = items.devMode ? DEV_URL : PROD_URL;
+});
+
+// Listen for settings changes
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "settings_updated") {
+        chrome.storage.sync.get({ devMode: false }, (items) => {
+            BACKEND_URL = items.devMode ? DEV_URL : PROD_URL;
+            console.log("Backend URL updated to:", BACKEND_URL);
+        });
+    }
+});
 
 // Listen for tab updates
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -88,6 +105,11 @@ async function analyzeUrl(tabId, url) {
         if (result.status === 'phishing') {
             chrome.tabs.sendMessage(tabId, { action: "SHOW_ALERT", type: "phishing" })
                 .catch(() => console.log("Tab probably not ready for alert"));
+
+            // Increment blocked count
+            chrome.storage.local.get({ blockedCount: 0 }, (items) => {
+                chrome.storage.local.set({ blockedCount: items.blockedCount + 1 });
+            });
         } else if (result.status === 'suspicious') {
             chrome.tabs.sendMessage(tabId, { action: "SHOW_ALERT", type: "suspicious" })
                 .catch(() => console.log("Tab probably not ready for alert"));
