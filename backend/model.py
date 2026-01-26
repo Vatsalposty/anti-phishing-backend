@@ -142,7 +142,7 @@ class PhishingModel:
 
         # 0.6 Keyword Heuristics (Catch-all for 'secure-login' patterns the ML might miss)
         # 1. High-risk phrases (often used in demos or blatant phishing)
-        high_risk_phrases = ['secure-login', 'verify-account', 'update-password', 'login-verify', 'phishing']
+        high_risk_phrases = ['secure-login', 'verify-account', 'update-password', 'login-verify']
         for phrase in high_risk_phrases:
             if phrase in url_lower:
                 return 'phishing', 90

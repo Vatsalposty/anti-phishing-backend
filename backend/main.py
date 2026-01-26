@@ -30,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "active", "service": "Anti-Phishing Backend"}
 
@@ -53,9 +53,7 @@ class ReportRequest(BaseModel):
 
 # --- Endpoints ---
 
-@app.get("/")
-def read_root():
-    return {"message": "Anti-Phishing API is running"}
+
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_url(request: AnalyzeRequest):
@@ -91,7 +89,7 @@ def report_url(request: ReportRequest):
         logger.error(f"Error logging report: {e}")
         raise HTTPException(status_code=500, detail="Failed to log report")
 
-@app.get("/stats")
+@app.api_route("/stats", methods=["GET", "HEAD"])
 def get_stats():
     # In a real app, this would fetch from Firestore
     # For now, we return mock/example stats
