@@ -7,15 +7,19 @@ const tabStatus = new Map(); // Store status per tabId
 
 // Initialize settings
 chrome.storage.sync.get({ devMode: false }, (items) => {
-    BACKEND_URL = items.devMode ? DEV_URL : PROD_URL;
+    if (items) {
+        BACKEND_URL = items.devMode ? DEV_URL : PROD_URL;
+    }
 });
 
 // Listen for settings changes
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "settings_updated") {
         chrome.storage.sync.get({ devMode: false }, (items) => {
-            BACKEND_URL = items.devMode ? DEV_URL : PROD_URL;
-            console.log("Backend URL updated to:", BACKEND_URL);
+            if (items) {
+                BACKEND_URL = items.devMode ? DEV_URL : PROD_URL;
+                console.log("Backend URL updated to:", BACKEND_URL);
+            }
         });
     }
 });
