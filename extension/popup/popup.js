@@ -98,62 +98,97 @@ document.addEventListener('DOMContentLoaded', async () => {
                 btn.disabled = false;
             }, 3000);
         }
+        // Initial check for protection status
+        updateProtectionFooter();
+
+        // Listen for storage changes to update footer instantly
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area === 'sync' && changes.protectionEnabled) {
+                updateProtectionFooter();
+            }
+        });
+
+        // ... existing report button listener ...
+        document.getElementById('report-btn').addEventListener('click', async () => {
+            // ...
+        });
+    }); // End of DOMContentLoaded
+
+    function updateProtectionFooter() {
+        chrome.storage.sync.get({ protectionEnabled: true }, (items) => {
+            const footerText = document.querySelector('footer span');
+            const pulseDot = document.querySelector('.pulse-dot');
+            const footer = document.querySelector('footer');
+
+            if (!items.protectionEnabled) {
+                footerText.textContent = "PROTECTION DISABLED";
+                footerText.style.color = "#f5576c"; // Red/Pinkish
+                pulseDot.style.background = "#f5576c";
+                pulseDot.classList.remove('active-pulse'); // detailed keyframe animation class if needed
+                // Optionally stop animation:
+                pulseDot.style.animation = 'none';
+            } else {
+                footerText.textContent = "AI PROTECTION ACTIVE";
+                footerText.style.color = "var(--text-muted)";
+                pulseDot.style.background = "var(--safe-gradient)";
+                pulseDot.style.animation = ""; // Restore animation
+            }
+        });
+    }
+
+    function updateUI(data) {
+        const statusCard = document.getElementById('status-card');
+        const statusText = document.getElementById('status-text');
+        const shieldCheck = document.querySelector('.shield-check');
+        const shieldAlert = document.querySelector('.shield-alert');
+        const trustScore = document.getElementById('trust-score');
+        const container = document.querySelector('.container');
+        const root = document.documentElement;
+
+        // Reset classes
+        statusCard.classList.remove('safe', 'phishing', 'error');
+        container.classList.remove('phishing-bg');
+
+        if (data.status === 'phishing') {
+            statusCard.classList.add('phishing');
+            container.classList.add('phishing-bg');
+            statusText.textContent = 'Phishing Detected';
+            shieldCheck.style.display = 'none';
+            shieldAlert.style.display = 'block';
+            trustScore.textContent = `${data.confidence || 10}%`;
+            root.style.setProperty('--safe-gradient', 'var(--danger-gradient)');
+        } else if (data.status === 'suspicious') {
+            statusCard.classList.add('phishing'); // Re-use styling but with different text
+            statusText.textContent = 'Suspicious Site';
+            shieldCheck.style.display = 'none';
+            shieldAlert.style.display = 'block';
+            trustScore.textContent = `${data.confidence || 45}%`;
+            root.style.setProperty('--safe-gradient', 'var(--warning-gradient)');
+        } else if (data.status === 'scanning') {
+            statusText.textContent = 'Analyzing...';
+            shieldCheck.style.display = 'none';
+            shieldAlert.style.display = 'none';
+            trustScore.textContent = '---';
+        } else if (data.status === 'error') {
+            statusCard.classList.add('error');
+            statusText.textContent = 'Offline';
+            shieldCheck.style.display = 'none';
+            shieldAlert.style.display = 'block';
+            trustScore.textContent = 'ERR';
+        } else {
+            // Safe
+            statusCard.classList.add('safe');
+            statusText.textContent = 'Safe Website';
+            shieldCheck.style.display = 'block';
+            shieldAlert.style.display = 'none';
+            trustScore.textContent = `${data.confidence || 98}%`;
+            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)');
+        }
+    }
+
+    // Listen for updates from background (real-time)
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === "update_status") {
+            updateUI(message.data);
+        }
     });
-});
-
-function updateUI(data) {
-    const statusCard = document.getElementById('status-card');
-    const statusText = document.getElementById('status-text');
-    const shieldCheck = document.querySelector('.shield-check');
-    const shieldAlert = document.querySelector('.shield-alert');
-    const trustScore = document.getElementById('trust-score');
-    const container = document.querySelector('.container');
-    const root = document.documentElement;
-
-    // Reset classes
-    statusCard.classList.remove('safe', 'phishing', 'error');
-    container.classList.remove('phishing-bg');
-
-    if (data.status === 'phishing') {
-        statusCard.classList.add('phishing');
-        container.classList.add('phishing-bg');
-        statusText.textContent = 'Phishing Detected';
-        shieldCheck.style.display = 'none';
-        shieldAlert.style.display = 'block';
-        trustScore.textContent = `${data.confidence || 10}%`;
-        root.style.setProperty('--safe-gradient', 'var(--danger-gradient)');
-    } else if (data.status === 'suspicious') {
-        statusCard.classList.add('phishing'); // Re-use styling but with different text
-        statusText.textContent = 'Suspicious Site';
-        shieldCheck.style.display = 'none';
-        shieldAlert.style.display = 'block';
-        trustScore.textContent = `${data.confidence || 45}%`;
-        root.style.setProperty('--safe-gradient', 'var(--warning-gradient)');
-    } else if (data.status === 'scanning') {
-        statusText.textContent = 'Analyzing...';
-        shieldCheck.style.display = 'none';
-        shieldAlert.style.display = 'none';
-        trustScore.textContent = '---';
-    } else if (data.status === 'error') {
-        statusCard.classList.add('error');
-        statusText.textContent = 'Offline';
-        shieldCheck.style.display = 'none';
-        shieldAlert.style.display = 'block';
-        trustScore.textContent = 'ERR';
-    } else {
-        // Safe
-        statusCard.classList.add('safe');
-        statusText.textContent = 'Safe Website';
-        shieldCheck.style.display = 'block';
-        shieldAlert.style.display = 'none';
-        trustScore.textContent = `${data.confidence || 98}%`;
-        root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)');
-    }
-}
-
-// Listen for updates from background (real-time)
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === "update_status") {
-        updateUI(message.data);
-    }
-});
