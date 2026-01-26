@@ -75,7 +75,11 @@ function showOverlay(type) {
 
     // Event Listeners
     document.getElementById('pg-go-back').addEventListener('click', () => {
-        history.back();
+        if (history.length > 1) {
+            history.back();
+        } else {
+            window.location.href = 'https://www.google.com';
+        }
     });
 
     document.getElementById('pg-ignore').addEventListener('click', () => {
