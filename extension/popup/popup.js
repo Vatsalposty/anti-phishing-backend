@@ -107,54 +107,47 @@ function updateUI(data) {
     const shieldCheck = document.querySelector('.shield-check');
     const shieldAlert = document.querySelector('.shield-alert');
     const trustScore = document.getElementById('trust-score');
-    const footerPulse = document.querySelector('.pulse');
+    const container = document.querySelector('.container');
     const root = document.documentElement;
 
+    // Reset classes
+    statusCard.classList.remove('safe', 'phishing', 'error');
+    container.classList.remove('phishing-bg');
+
     if (data.status === 'phishing') {
-        statusCard.classList.remove('safe');
         statusCard.classList.add('phishing');
+        container.classList.add('phishing-bg');
         statusText.textContent = 'Phishing Detected';
         shieldCheck.style.display = 'none';
         shieldAlert.style.display = 'block';
         trustScore.textContent = `${data.confidence || 10}%`;
-        root.style.setProperty('--primary-color', '#da3633');
-        footerPulse.style.backgroundColor = '#da3633';
+        root.style.setProperty('--safe-gradient', 'var(--danger-gradient)');
     } else if (data.status === 'suspicious') {
-        statusCard.classList.remove('safe');
-        statusCard.classList.add('phishing'); // Use warning styling if we had it, reusing phishing for now
+        statusCard.classList.add('phishing'); // Re-use styling but with different text
         statusText.textContent = 'Suspicious Site';
         shieldCheck.style.display = 'none';
-        shieldAlert.style.display = 'block'; // Or warning icon
+        shieldAlert.style.display = 'block';
         trustScore.textContent = `${data.confidence || 45}%`;
-        root.style.setProperty('--primary-color', '#d29922');
-        footerPulse.style.backgroundColor = '#d29922';
+        root.style.setProperty('--safe-gradient', 'var(--warning-gradient)');
     } else if (data.status === 'scanning') {
-        statusCard.classList.remove('safe', 'phishing');
         statusText.textContent = 'Analyzing...';
         shieldCheck.style.display = 'none';
         shieldAlert.style.display = 'none';
         trustScore.textContent = '---';
-        root.style.setProperty('--primary-color', '#8b949e');
-        footerPulse.style.backgroundColor = '#8b949e';
     } else if (data.status === 'error') {
-        statusCard.classList.remove('safe', 'phishing');
-        statusCard.classList.add('error'); // Add error class
-        statusText.textContent = 'Backend Offline';
+        statusCard.classList.add('error');
+        statusText.textContent = 'Offline';
         shieldCheck.style.display = 'none';
-        shieldAlert.style.display = 'block'; // Or warning
+        shieldAlert.style.display = 'block';
         trustScore.textContent = 'ERR';
-        root.style.setProperty('--primary-color', '#fff'); // White for error icon
-        footerPulse.style.backgroundColor = '#333';
     } else {
         // Safe
         statusCard.classList.add('safe');
-        statusCard.classList.remove('phishing');
         statusText.textContent = 'Safe Website';
         shieldCheck.style.display = 'block';
         shieldAlert.style.display = 'none';
         trustScore.textContent = `${data.confidence || 98}%`;
-        root.style.setProperty('--primary-color', '#238636');
-        footerPulse.style.backgroundColor = '#238636';
+        root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)');
     }
 }
 

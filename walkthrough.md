@@ -6,14 +6,17 @@ This document outlines the completed Anti-Phishing Browser Extension, fully inte
 
 ### Frontend (Chrome Extension)
 - [x] **Real-time Analysis**: Automatically checks every visited URL against the cloud backend.
-- [x] **Premium UI**: Dark mode, glassmorphism design, and animated status indicators.
-- [x] **Active Alerts**: **Blocks phishing sites** with a full-screen red warning overlay preventing accidental access.
+- [x] **Premium UI (Crystal Clear)**: Glassmorphism design, frosted glass panels, and liquid gradients.
+- [x] **New Icon Pack**: Custom premium icons (128px, 48px, 16px) matching the modern aesthetic.
+- [x] **Active Alerts**: **Blocks phishing sites** with a full-screen blurred glass warning overlay.
 - [x] **User Reporting**: "Report Suspicious" button allows users to flag sites directly to the database.
 - [x] **Status Reporting**: 
   - 🟢 **Safe**: Verified domains (e.g., Google) or low-risk URLs.
   - 🟠 **Suspicious**: High-risk characteristics (length, keywords) or partially matched heuristics.
   - 🔴 **Phishing**: Known bad domains or ML-predicted phishing sites.
+    - [x] **Keyword Heuristics**: Extra protection layer for blatant phishing patterns (e.g., `secure-login-verify`).
   - ⚫ **Backend Offline**: Graceful error handling with offline fallback.
+
 
 ### Backend (Python/FastAPI on Render)
 - [x] **Cloud Deployment**: Hosted on Render with auto-deployment from GitHub.
@@ -24,8 +27,10 @@ This document outlines the completed Anti-Phishing Browser Extension, fully inte
 - [x] **API Endpoint**: 
   - `POST /analyze`: Returns prediction (safe/phishing/suspicious) and confidence score.
   - `POST /report`: Accepting user-submitted reports.
-  - `GET /`: Health check for uptime monitoring.
+  - `GET /stats`: Real-time health check for monitoring.
 - [x] **Firebase Integration**: Logs attempts and user reports to Firestore with deduplication.
+- [x] **24/7 Availability**: Configured with UptimeRobot "Ping" monitor to prevent server slumber (Cold Start bypass).
+
 
 ## 2. Setup & Usage
 
