@@ -3,79 +3,73 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, classification_report
 import joblib
-import re
-import random
-from urllib.parse import urlparse
+import os
+import sys
 
-# --- 1. Dataset Generation (Synthetic) ---
-def generate_dataset(n=2000):
-    print("Generating synthetic dataset...")
-    data = []
-    
-    # Trusted Domains
-    trusted = ['google', 'facebook', 'amazon', 'youtube', 'wikipedia', 'twitter', 'linkedin', 'netflix', 'microsoft', 'apple']
-    tlds = ['.com', '.org', '.net', '.edu', '.gov']
-    
-    # Phishing Keywords
-    bad_words = ['secure', 'login', 'account', 'verify', 'update', 'banking', 'confirm', 'wallet', 'bonus']
-    bad_tlds = ['.xyz', '.top', '.club', '.info', '.site']
+# Add current directory to path to import model.py
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from model import PhishingModel
 
-    for _ in range(n // 2):
-        # Generate Safe URL
-        domain = random.choice(trusted)
-        tld = random.choice(tlds)
-        path = "".join(random.choices("abcdefghijklmnopqrstuvwxyz/", k=random.randint(5, 15)))
-        url = f"https://www.{domain}{tld}/{path}"
-        data.append((url, 0)) # 0 = Safe
-
-    for _ in range(n // 2):
-        # Generate Phishing URL
-        target = random.choice(trusted) # impersonated
-        bad = random.choice(bad_words)
-        tld = random.choice(bad_tlds)
+# --- 1. Load Real Dataset ---
+def load_dataset():
+    print("Loading 'dataset_phishing.csv'...")
+    try:
+        df = pd.read_csv('dataset_phishing.csv')
+        # Expecting columns 'url' and 'status' (legitimate/phishing)
+        # If the file has different properties, we might need to adjust.
+        # Based on inspection: url, ..., status
         
-        # Structure: http://google-secure-login.xyz
-        url = f"http://{target}-{bad}{tld}/login"
-        data.append((url, 1)) # 1 = Phishing
+        # Keep only necessary columns
+        df = df[['url', 'status']]
+        
+        # Map labels: legitimate -> 0, phishing -> 1
+        df['label'] = df['status'].map({'legitimate': 0, 'phishing': 1})
+        
+        # Drop rows where mapping failed (if any)
+        df = df.dropna(subset=['label'])
+        
+        print(f"Loaded {len(df)} samples.")
+        print(f"Distribution:\n{df['label'].value_counts()}")
+        
+        return df
+    except Exception as e:
+        print(f"Error loading CSV: {e}")
+        print("Falling back to synthetic generation...")
+        return generate_synthetic_dataset()
 
-    df = pd.DataFrame(data, columns=['url', 'label'])
-    return df
+def generate_synthetic_dataset(n=100):
+    # Minimal fallback just to prevent crash if CSV is missing
+    data = [("http://google.com", 0), ("http://phish-secure-login.xyz", 1)]
+    return pd.DataFrame(data, columns=['url', 'label'])
 
-# --- 2. Feature Extraction ---
-def extract_features(url):
-    features = []
+# --- 2. Training ---
+def train(n_samples=None): # n_samples argument kept for compatibility but ignored for real data
+    df = load_dataset()
     
-    # 1. Length of URL
-    features.append(len(url))
+    print("Extracting features using PhishingModel logic...")
+    pm = PhishingModel()
     
-    # 2. Count of dots
-    features.append(url.count('.'))
+    # Use the EXACT same feature extraction as the live backend
+    # This prevents "feature mismatch" errors
+    X = []
+    y = []
     
-    # 3. Count of hyphens
-    features.append(url.count('-'))
-    
-    # 4. Count of special chars (@, //)
-    features.append(url.count('@'))
-    features.append(url.count('//'))
-    
-    # 5. Has IP address?
-    ip_pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
-    features.append(1 if re.search(ip_pattern, url) else 0)
-    
-    # 6. Has HTTP (insecure)?
-    features.append(1 if 'https' not in url else 0)
-    
-    return features
+    failed_count = 0
+    for index, row in df.iterrows():
+        try:
+            features = pm.extract_features(row['url'])
+            X.append(features)
+            y.append(row['label'])
+        except Exception as e:
+            failed_count += 1
+            
+    if failed_count > 0:
+        print(f"Skipped {failed_count} URLs due to extraction errors.")
 
-# --- 3. Training ---
-def train(n_samples=2000):
-    df = generate_dataset(n=n_samples)
-    
-    print("Extracting features...")
-    X = np.array([extract_features(url) for url in df['url']])
-    y = df['label'].values
+    X = np.array(X)
+    y = np.array(y)
     
     # Split
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -89,15 +83,15 @@ def train(n_samples=2000):
     preds = model.predict(X_test)
     acc = accuracy_score(y_test, preds)
     print(f"Model Accuracy: {acc * 100:.2f}%")
+    print("\nClassification Report:\n", classification_report(y_test, preds))
     
-    # Save
     # Save
     import os
     current_dir = os.path.dirname(os.path.abspath(__file__))
     model_path = os.path.join(current_dir, 'phishing_model.pkl')
     print(f"Saving model to {model_path}...")
     joblib.dump(model, model_path)
-    print("Done!")
+    print("Done! Model saved.")
 
 if __name__ == "__main__":
     train()
