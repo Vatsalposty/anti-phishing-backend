@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (!hostname) {
                     if (tab.url.startsWith('file:')) hostname = 'Local File';
                     else if (tab.url.startsWith('chrome:')) hostname = 'Chrome Page';
+                    else if (tab.url.startsWith('chrome-extension:')) hostname = 'Extension Page';
                     else hostname = tab.url;
                 }
             } catch (e) {
@@ -27,14 +28,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // We still might want url stats if dev mode, but for main UI:
                 } else {
                     // Determine status logic...
-                    if (hostname === "Local File" || hostname === "Chrome Page") {
+                    if (hostname === "Local File" || hostname === "Chrome Page" || hostname === "Extension Page") {
                         updateUI({ status: 'safe', confidence: 100 });
                     } else {
                         // Initial scan state
                         updateUI({ status: 'scanning' });
 
                         // Request status from background
-                        chrome.runtime.sendMessage({ action: "check_status", url: tab.url }, (response) => {
+                        chrome.runtime.sendMessage({ action: "get_status", url: tab.url, tabId: tab.id }, (response) => {
                             if (chrome.runtime.lastError) {
                                 console.error("Connection error:", chrome.runtime.lastError);
                                 updateUI({ status: 'error' });
