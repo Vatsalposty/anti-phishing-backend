@@ -56,17 +56,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const settingsBtn = document.querySelector('.settings-icon');
     if (settingsBtn) {
         settingsBtn.addEventListener('click', (e) => {
-            console.log("Settings button clicked");
-            e.preventDefault(); // Prevent any default anchor behavior
-
-            if (chrome.runtime.openOptionsPage) {
-                chrome.runtime.openOptionsPage().catch(err => {
-                    console.error("openOptionsPage failed:", err);
-                    window.open(chrome.runtime.getURL('options/options.html'));
-                });
-            } else {
-                window.open(chrome.runtime.getURL('options/options.html'));
-            }
+            e.preventDefault();
+            // Force open in new tab - most reliable method
+            const optionsUrl = chrome.runtime.getURL('options/options.html');
+            window.open(optionsUrl, '_blank');
         });
     } else {
         console.error("Settings button not found in DOM");

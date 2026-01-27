@@ -89,6 +89,10 @@ header {
     cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+
+    /* Ensure clickability */
+    position: relative;
+    z-index: 100;
 }
 
 .settings-icon:hover {
