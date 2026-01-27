@@ -20,15 +20,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             document.getElementById('current-url').textContent = hostname;
 
-            // Request status from background script
-            chrome.runtime.sendMessage({ action: "get_status", tabId: tab.id, url: tab.url }, (response) => {
-                if (response) {
-                    updateUI(response);
+            // Check Protection Status First
+            chrome.storage.sync.get({ protectionEnabled: true }, (items) => {
+                if (!items.protectionEnabled) {
+                    updateUI({ status: 'disabled' });
+                    // We still might want url stats if dev mode, but for main UI:
                 } else {
-                    console.log("No response yet, scanning...");
+                    // Determine status logic...
+                    if (hostname === "Local File" || hostname === "Chrome Page") {
+                        updateUI({ status: 'safe', confidence: 100 });
+                    } else {
+                        // Initial scan state
+                        updateUI({ status: 'scanning' });
+
+                        // Request status from background
+                        chrome.runtime.sendMessage({ action: "check_status", url: tab.url }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.error("Connection error:", chrome.runtime.lastError);
+                                updateUI({ status: 'error' });
+                            } else {
+                                // Double check protection didn't turn off in the millisecond interim
+                                chrome.storage.sync.get({ protectionEnabled: true }, (current) => {
+                                    if (current.protectionEnabled) {
+                                        updateUI(response);
+                                    } else {
+                                        updateUI({ status: 'disabled' });
+                                    }
+                                });
+                            }
+                        });
+                    }
                 }
             });
-
             // Fetch Local Stats (Total Blocked)
             chrome.storage.local.get({ blockedCount: 0 }, (items) => {
                 const scanCountEl = document.getElementById('scan-count');
@@ -177,6 +200,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldCheck.style.display = 'none';
             shieldAlert.style.display = 'block';
             trustScore.textContent = 'ERR';
+        } else if (data.status === 'disabled') {
+            // New Disabled State
+            statusCard.classList.add('error'); // Use error styling or a new 'disabled' style if preferred
+            statusCard.style.border = '1px solid var(--text-muted)'; // Optional custom styling
+            statusText.textContent = 'Protection Disabled';
+            shieldCheck.style.display = 'none';
+            shieldAlert.style.display = 'block';
+            // In a real disabled state, maybe show a different icon or grayscale the alert
+            trustScore.textContent = 'OFF';
+            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%)'); // Grey gradient
         } else {
             // Safe
             statusCard.classList.add('safe');
@@ -191,7 +224,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Listen for updates from background (real-time)
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === "update_status") {
-            updateUI(message.data);
+            chrome.storage.sync.get({ protectionEnabled: true }, (items) => {
+                if (!items.protectionEnabled) {
+                    updateUI({ status: 'disabled', confidence: 0 });
+                } else {
+                    updateUI(message.data);
+                }
+            });
         }
     });
 
