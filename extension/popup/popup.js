@@ -52,15 +52,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Settings Button Listener
+    // Settings Button Listener
     const settingsBtn = document.querySelector('.settings-icon');
     if (settingsBtn) {
-        settingsBtn.addEventListener('click', () => {
+        settingsBtn.addEventListener('click', (e) => {
+            console.log("Settings button clicked");
+            e.preventDefault(); // Prevent any default anchor behavior
+
             if (chrome.runtime.openOptionsPage) {
-                chrome.runtime.openOptionsPage();
+                chrome.runtime.openOptionsPage().catch(err => {
+                    console.error("openOptionsPage failed:", err);
+                    window.open(chrome.runtime.getURL('options/options.html'));
+                });
             } else {
                 window.open(chrome.runtime.getURL('options/options.html'));
             }
         });
+    } else {
+        console.error("Settings button not found in DOM");
     }
 
     document.getElementById('report-btn').addEventListener('click', async () => {
