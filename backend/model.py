@@ -96,6 +96,89 @@ class PhishingModel:
         
         return features
 
+    def analyze_html_content(self, url):
+        """
+        Fetches webpage HTML and extracts phishing-related features.
+        Returns a dict with feature scores and a risk_score (0-100).
+        """
+        html_features = {
+            'password_fields': 0,
+            'hidden_inputs': 0,
+            'external_forms': 0,
+            'iframes': 0,
+            'external_scripts': 0,
+            'urgency_keywords': 0,
+            'risk_score': 0,
+            'fetched': False
+        }
+        
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+            
+            if response.status_code != 200:
+                return html_features
+            
+            html = response.text.lower()
+            html_features['fetched'] = True
+            
+            # 1. Count password fields (credential harvesting indicator)
+            html_features['password_fields'] = len(re.findall(r'type\s*=\s*["\']?password', html))
+            
+            # 2. Count hidden inputs (often used to pass stolen data)
+            html_features['hidden_inputs'] = len(re.findall(r'type\s*=\s*["\']?hidden', html))
+            
+            # 3. Check for forms posting to external domains
+            form_actions = re.findall(r'<form[^>]*action\s*=\s*["\']?(https?://[^"\'>\s]+)', html)
+            parsed_url = urlparse(url)
+            for action in form_actions:
+                action_domain = urlparse(action).netloc
+                if action_domain and action_domain != parsed_url.netloc:
+                    html_features['external_forms'] += 1
+            
+            # 4. Count iframes (can hide malicious content)
+            html_features['iframes'] = len(re.findall(r'<iframe', html))
+            
+            # 5. Count external scripts
+            scripts = re.findall(r'<script[^>]*src\s*=\s*["\']?(https?://[^"\'>\s]+)', html)
+            for script_src in scripts:
+                script_domain = urlparse(script_src).netloc
+                if script_domain and script_domain != parsed_url.netloc:
+                    html_features['external_scripts'] += 1
+            
+            # 6. Urgency/Fear keywords (psychological manipulation)
+            urgency_keywords = [
+                'verify your account', 'confirm your identity', 'update your password',
+                'suspend', 'locked', 'unauthorized', 'expire', 'immediately',
+                'click here to verify', 'confirm now', 'act now', '24 hours',
+                'your account will be', 'security alert', 'unusual activity'
+            ]
+            for keyword in urgency_keywords:
+                if keyword in html:
+                    html_features['urgency_keywords'] += 1
+            
+            # Calculate Risk Score
+            risk = 0
+            risk += html_features['password_fields'] * 15  # Password fields are risky
+            risk += html_features['hidden_inputs'] * 5
+            risk += html_features['external_forms'] * 25   # Very suspicious
+            risk += html_features['iframes'] * 10
+            risk += html_features['external_scripts'] * 5
+            risk += html_features['urgency_keywords'] * 8
+            
+            html_features['risk_score'] = min(risk, 100)  # Cap at 100
+            
+            print(f"HTML Analysis for {url}: {html_features}")
+            
+        except requests.exceptions.Timeout:
+            print(f"HTML Analysis Timeout for {url}")
+        except Exception as e:
+            print(f"HTML Analysis Error for {url}: {e}")
+        
+        return html_features
+
     def check_phishtank(self, url):
         """Checks URL against PhishTank API (Free)"""
         try:
@@ -154,6 +237,25 @@ class PhishingModel:
             if any(k in url_lower for k in demo_keywords):
                 print(f"Demo Detection: Flagging local URL {url}")
                 return 'suspicious', 85
+
+        # --- NEW: HTML Content Analysis ---
+        # Skip for localhost to avoid self-request loops during dev
+        if not is_local:
+            html_analysis = self.analyze_html_content(url)
+            if html_analysis['fetched']:
+                html_risk = html_analysis['risk_score']
+                
+                # High Risk: External forms + Password fields = Almost certainly phishing
+                if html_analysis['external_forms'] > 0 and html_analysis['password_fields'] > 0:
+                    print(f"HTML RED FLAG: External form + password field detected!")
+                    return 'phishing', max(html_risk, 92)
+                
+                # Medium-High Risk: Many suspicious indicators
+                if html_risk >= 60:
+                    return 'phishing', html_risk
+                elif html_risk >= 35:
+                    return 'suspicious', html_risk
+        # --- End HTML Analysis ---
 
         # 1. Use ML Model if available
         if self.model:

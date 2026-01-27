@@ -109,18 +109,58 @@ function blockInputs() {
     // Stop any pending loads
     window.stop();
 
-    // Capture and block events
-    window.addEventListener('submit', blockHandlers, true);
-    window.addEventListener('keydown', blockHandlers, true);
-    window.addEventListener('input', blockHandlers, true);
-    window.addEventListener('click', blockHandlers, true);
-    window.addEventListener('mousedown', blockHandlers, true);
+    // Capture and block events at the window level
+    const eventsToBlock = [
+        'submit', 'keydown', 'keyup', 'keypress',
+        'input', 'click', 'mousedown', 'mouseup',
+        'paste', 'copy', 'cut', 'contextmenu',
+        'focus', 'focusin', 'touchstart', 'touchend'
+    ];
+
+    eventsToBlock.forEach(eventType => {
+        window.addEventListener(eventType, blockHandlers, true);
+    });
+
+    // Disable all input elements directly
+    document.querySelectorAll('input, textarea, select, button, [contenteditable="true"]').forEach(el => {
+        el.disabled = true;
+        el.readOnly = true;
+        el.style.pointerEvents = 'none';
+        el.style.opacity = '0.5';
+    });
+
+    // Disable all forms
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log("Anti-Phishing Guard: Form submission blocked!");
+            return false;
+        }, true);
+    });
+
+    console.log("Anti-Phishing Guard: All inputs BLOCKED.");
 }
 
 function unblockInputs() {
-    window.removeEventListener('submit', blockHandlers, true);
-    window.removeEventListener('keydown', blockHandlers, true);
-    window.removeEventListener('input', blockHandlers, true);
-    window.removeEventListener('click', blockHandlers, true);
-    window.removeEventListener('mousedown', blockHandlers, true);
+    const eventsToBlock = [
+        'submit', 'keydown', 'keyup', 'keypress',
+        'input', 'click', 'mousedown', 'mouseup',
+        'paste', 'copy', 'cut', 'contextmenu',
+        'focus', 'focusin', 'touchstart', 'touchend'
+    ];
+
+    eventsToBlock.forEach(eventType => {
+        window.removeEventListener(eventType, blockHandlers, true);
+    });
+
+    // Re-enable input elements
+    document.querySelectorAll('input, textarea, select, button, [contenteditable="true"]').forEach(el => {
+        el.disabled = false;
+        el.readOnly = false;
+        el.style.pointerEvents = '';
+        el.style.opacity = '';
+    });
+
+    console.log("Anti-Phishing Guard: Inputs UNBLOCKED (bypass).");
 }
