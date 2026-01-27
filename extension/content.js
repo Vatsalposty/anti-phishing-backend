@@ -121,16 +121,24 @@ function blockInputs() {
         window.addEventListener(eventType, blockHandlers, true);
     });
 
-    // Disable all input elements directly
+    // Disable all input elements directly - EXCEPT those in our overlay
+    const overlay = document.getElementById('phishing-guard-overlay');
     document.querySelectorAll('input, textarea, select, button, [contenteditable="true"]').forEach(el => {
+        // Skip if element is inside our overlay
+        if (overlay && overlay.contains(el)) {
+            return;
+        }
         el.disabled = true;
         el.readOnly = true;
         el.style.pointerEvents = 'none';
         el.style.opacity = '0.5';
     });
 
-    // Disable all forms
+    // Disable all forms - EXCEPT those in our overlay
     document.querySelectorAll('form').forEach(form => {
+        if (overlay && overlay.contains(form)) {
+            return;
+        }
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -139,7 +147,7 @@ function blockInputs() {
         }, true);
     });
 
-    console.log("Anti-Phishing Guard: All inputs BLOCKED.");
+    console.log("Anti-Phishing Guard: All inputs BLOCKED (overlay buttons preserved).");
 }
 
 function unblockInputs() {
