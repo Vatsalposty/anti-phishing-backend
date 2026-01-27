@@ -194,3 +194,5 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateUI(message.data);
         }
     });
+
+});
