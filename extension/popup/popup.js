@@ -124,43 +124,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 btn.disabled = false;
             }, 3000);
         }
-        // Initial check for protection status
-        updateProtectionFooter();
-
-        // Listen for storage changes to update footer instantly
+        // Listen for storage changes to update UI instantly
         chrome.storage.onChanged.addListener((changes, area) => {
-            if (area === 'sync' && changes.protectionEnabled) {
-                updateProtectionFooter();
+            if (area === 'sync' && changes.protectionEnabled !== undefined) {
+                if (!changes.protectionEnabled.newValue) {
+                    updateUI({ status: 'disabled' });
+                } else {
+                    // If re-enabled, we should probably re-scan or reload, or just set to scanning
+                    updateUI({ status: 'scanning' });
+                    chrome.runtime.sendMessage({ action: "get_status", url: activeTab?.url, tabId: activeTab?.id }, (response) => {
+                        if (response) updateUI(response);
+                    });
+                }
             }
         });
 
         // ... existing report button listener ...
         document.getElementById('report-btn').addEventListener('click', async () => {
-            // ...
+            // ... logic ...
         });
     }); // End of DOMContentLoaded
-
-    function updateProtectionFooter() {
-        chrome.storage.sync.get({ protectionEnabled: true }, (items) => {
-            const footerText = document.querySelector('footer span');
-            const pulseDot = document.querySelector('.pulse-dot');
-            const footer = document.querySelector('footer');
-
-            if (!items.protectionEnabled) {
-                footerText.textContent = "PROTECTION DISABLED";
-                footerText.style.color = "#f5576c"; // Red/Pinkish
-                pulseDot.style.background = "#f5576c";
-                pulseDot.classList.remove('active-pulse'); // detailed keyframe animation class if needed
-                // Optionally stop animation:
-                pulseDot.style.animation = 'none';
-            } else {
-                footerText.textContent = "AI PROTECTION ACTIVE";
-                footerText.style.color = "var(--text-muted)";
-                pulseDot.style.background = "var(--safe-gradient)";
-                pulseDot.style.animation = ""; // Restore animation
-            }
-        });
-    }
 
     function updateUI(data) {
         const statusCard = document.getElementById('status-card');
@@ -175,6 +158,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusCard.classList.remove('safe', 'phishing', 'error');
         container.classList.remove('phishing-bg');
 
+        const footerText = document.querySelector('footer span');
+        const pulseDot = document.querySelector('.pulse-dot');
+
         if (data.status === 'phishing') {
             statusCard.classList.add('phishing');
             container.classList.add('phishing-bg');
@@ -183,34 +169,59 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldAlert.style.display = 'block';
             trustScore.textContent = `${data.confidence || 10}%`;
             root.style.setProperty('--safe-gradient', 'var(--danger-gradient)');
+
+            // Ensure footer reflects active protection
+            footerText.textContent = "AI PROTECTION ACTIVE";
+            footerText.style.color = "var(--text-muted)";
+            pulseDot.style.background = "#f5576c"; // Match usage
+            pulseDot.style.animation = "";
         } else if (data.status === 'suspicious') {
-            statusCard.classList.add('phishing'); // Re-use styling but with different text
+            statusCard.classList.add('phishing');
             statusText.textContent = 'Suspicious Site';
             shieldCheck.style.display = 'none';
             shieldAlert.style.display = 'block';
             trustScore.textContent = `${data.confidence || 45}%`;
             root.style.setProperty('--safe-gradient', 'var(--warning-gradient)');
+
+            footerText.textContent = "AI PROTECTION ACTIVE";
+            footerText.style.color = "var(--text-muted)";
+            pulseDot.style.background = "#f6d365";
+            pulseDot.style.animation = "";
         } else if (data.status === 'scanning') {
             statusText.textContent = 'Analyzing...';
             shieldCheck.style.display = 'none';
             shieldAlert.style.display = 'none';
             trustScore.textContent = '---';
+
+            footerText.textContent = "AI PROTECTION ACTIVE";
+            footerText.style.color = "var(--text-muted)";
+            pulseDot.style.background = "var(--safe-gradient)";
+            pulseDot.style.animation = "";
         } else if (data.status === 'error') {
             statusCard.classList.add('error');
             statusText.textContent = 'Offline';
             shieldCheck.style.display = 'none';
             shieldAlert.style.display = 'block';
             trustScore.textContent = 'ERR';
+
+            footerText.textContent = "AI PROTECTION ACTIVE"; // Still active, just errored
+            footerText.style.color = "var(--text-muted)";
+            pulseDot.style.background = "#555";
         } else if (data.status === 'disabled') {
             // New Disabled State
-            statusCard.classList.add('error'); // Use error styling or a new 'disabled' style if preferred
-            statusCard.style.border = '1px solid var(--text-muted)'; // Optional custom styling
+            statusCard.classList.add('error');
+            statusCard.style.border = '1px solid var(--text-muted)';
             statusText.textContent = 'Protection Disabled';
             shieldCheck.style.display = 'none';
             shieldAlert.style.display = 'block';
-            // In a real disabled state, maybe show a different icon or grayscale the alert
             trustScore.textContent = 'OFF';
-            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%)'); // Grey gradient
+            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%)');
+
+            // Update Footer for Disabled State
+            footerText.textContent = "PROTECTION DISABLED";
+            footerText.style.color = "#f5576c";
+            pulseDot.style.background = "#f5576c";
+            pulseDot.style.animation = 'none';
         } else {
             // Safe
             statusCard.classList.add('safe');
@@ -219,6 +230,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldAlert.style.display = 'none';
             trustScore.textContent = `${data.confidence || 98}%`;
             root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)');
+
+            footerText.textContent = "AI PROTECTION ACTIVE";
+            footerText.style.color = "var(--text-muted)";
+            pulseDot.style.background = "var(--safe-gradient)"; // Green
+            pulseDot.style.animation = "";
         }
     }
 
