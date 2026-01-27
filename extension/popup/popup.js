@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         settingsBtn.addEventListener('click', (e) => {
             e.preventDefault();
             // Force open in new tab - most reliable method
-            const optionsUrl = chrome.runtime.getURL('options/options.html');
+            const optionsUrl = chrome.runtime.getURL('settings.html');
             window.open(optionsUrl, '_blank');
         });
     } else {
