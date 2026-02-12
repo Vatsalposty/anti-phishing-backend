@@ -14,6 +14,22 @@ class PhishingModel:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         model_path = os.path.join(current_dir, 'phishing_model.pkl')
         
+        # Load Safe Domains Dataset
+        self.safe_domains = set()
+        try:
+            import json
+            data_path = os.path.join(current_dir, 'data', 'safe_domains.json')
+            if os.path.exists(data_path):
+                with open(data_path, 'r') as f:
+                    data = json.load(f)
+                    for category in data.values():
+                        self.safe_domains.update(category)
+                print(f"Loaded {len(self.safe_domains)} safe domains from allowlist database.")
+            else:
+                print("Warning: safe_domains.json not found.")
+        except Exception as e:
+            print(f"Error loading safe domains: {e}")
+
         try:
             import sklearn
             print(f"DEBUG: scikit-learn version: {sklearn.__version__}")
@@ -208,22 +224,21 @@ class PhishingModel:
         url_lower = url.lower()
 
         # 0. Allowlist (Hardware bypass for speed and safety)
-        allowlist = [
-            'google.com', 'gmail.com', 'youtube.com', 'facebook.com', 'amazon.com', 'amazon.in',
-            'wikipedia.org', 'chatgpt.com', 'openai.com', 'github.com', 'render.com',
-            'microsoft.com', 'apple.com', 'netflix.com', 'instagram.com', 'linkedin.com', 
-            'twitter.com', 'x.com', 'twitch.tv', 'yahoo.com', 'bing.com', 'flipkart.com',
-            'myntra.com', 'ajio.com', 'snapdeal.com'
-        ]
+        # Check if domain found in our safe_domains dataset
         from urllib.parse import urlparse
         try:
             domain = urlparse(url).netloc
             if domain.startswith('www.'): domain = domain[4:]
             
-            # Check if domain matches or matches a subdomain of an allowlisted site
-            # Logic: exact match OR ends with .domain (e.g. support.google.com)
-            for trusted in allowlist:
-                if domain == trusted or domain.endswith('.' + trusted):
+            # Check for exact match or subdomain overlap
+            # 1. Exact match in set (O(1))
+            if domain in self.safe_domains:
+                return 'safe', 99
+            
+            # 2. Check for subdomains (e.g. pay.amazon.in)
+            # This is slower but necessary. optimize by checking only if needed.
+            for trusted in self.safe_domains:
+                if domain.endswith('.' + trusted):
                     return 'safe', 99
         except:
             pass
