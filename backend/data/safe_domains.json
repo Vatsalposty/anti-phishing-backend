@@ -14,7 +14,17 @@
         "india.gov.in",
         "gst.gov.in",
         "epfindia.gov.in",
-        "irctc.co.in"
+        "irctc.co.in",
+        "cbse.gov.in",
+        "nta.ac.in",
+        "mohfw.gov.in",
+        "pmindia.gov.in",
+        "supremecourtofindia.nic.in",
+        "rbi.org.in",
+        "sebi.gov.in",
+        "ibbi.gov.in",
+        "mca.gov.in",
+        "digitalindia.gov.in"
     ],
     "banking_finance": [
         "paypal.com",
@@ -35,7 +45,18 @@
         "wellsfargo.com",
         "rbi.org.in",
         "npci.org.in",
-        "bharatpe.com"
+        "bharatpe.com",
+        "billdesk.com",
+        "ccavenue.com",
+        "citibank.co.in",
+        "canarabank.com",
+        "unionbankofindia.co.in",
+        "pnbindia.in",
+        "bobibanking.com",
+        "indusind.com",
+        "yesbank.in",
+        "idfcfirstbank.com",
+        "federalbank.co.in"
     ],
     "ecommerce": [
         "amazon.com",
@@ -57,7 +78,15 @@
         "jiomart.com",
         "zomato.com",
         "swiggy.com",
-        "blinkit.com"
+        "blinkit.com",
+        "bigbasket.com",
+        "zeptonow.com",
+        "dmart.in",
+        "reliancedigital.in",
+        "croma.com",
+        "urbancompany.com",
+        "lenskart.com",
+        "firstcry.com"
     ],
     "technology_social": [
         "google.com",
@@ -93,7 +122,52 @@
         "adobe.com",
         "dropbox.com",
         "slack.com",
-        "salesforce.com"
+        "salesforce.com",
+        "tcs.com",
+        "infosys.com",
+        "wipro.com",
+        "hcltech.com",
+        "techmahindra.com"
+    ],
+    "travel_booking": [
+        "irctc.co.in",
+        "makemytrip.com",
+        "goibibo.com",
+        "cleartrip.com",
+        "easemytrip.com",
+        "booking.com",
+        "agoda.com",
+        "expedia.com",
+        "airbnb.com",
+        "tripadvisor.com",
+        "ola.cabs",
+        "uber.com",
+        "redbus.in",
+        "abhibus.com",
+        "ixigo.com",
+        "indigo.in",
+        "airindia.com",
+        "spicejet.com",
+        "vistara.com"
+    ],
+    "news_media": [
+        "timesofindia.indiatimes.com",
+        "ndtv.com",
+        "hindustantimes.com",
+        "indianexpress.com",
+        "thehindu.com",
+        "bbc.com",
+        "cnn.com",
+        "nytimes.com",
+        "reuters.com",
+        "moneycontrol.com",
+        "economictimes.indiatimes.com",
+        "livemint.com",
+        "hotstar.com",
+        "sonyliv.com",
+        "zee5.com",
+        "jiocinema.com",
+        "bookmyshow.com"
     ],
     "cloud_dev": [
         "render.com",
@@ -108,7 +182,12 @@
         "godaddy.com",
         "namecheap.com",
         "hostinger.com",
-        "bluehost.com"
+        "bluehost.com",
+        "whois.com",
+        "domain.com",
+        "python.org",
+        "pypi.org",
+        "npmjs.com"
     ],
     "education_info": [
         "wikipedia.org",
@@ -123,6 +202,11 @@
         "medium.com",
         "quora.com",
         "researchgate.net",
-        "archive.org"
+        "archive.org",
+        "naukri.com",
+        "indeed.com",
+        "glassdoor.com",
+        "internshala.com",
+        "linkedin.com"
     ]
 }
