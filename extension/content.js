@@ -102,7 +102,8 @@ const blockHandlers = {
     handleEvent: function (e) {
         // Allow interaction with the overlay
         const overlay = document.getElementById('phishing-guard-overlay');
-        if (overlay && overlay.contains(e.target)) {
+        // Check if target is a valid Node before calling contains (prevents TypeError on window/document events)
+        if (overlay && e.target instanceof Node && overlay.contains(e.target)) {
             return;
         }
 
