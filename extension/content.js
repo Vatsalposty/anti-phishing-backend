@@ -9,38 +9,44 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 function showOverlay(type) {
-    if (document.getElementById('phishing-guard-overlay')) return;
+    chrome.storage.sync.get({ protectionEnabled: true }, (items) => {
+        if (!items.protectionEnabled) {
+            console.log("Anti-Phishing Guard: Protection disabled, suppressing overlay.");
+            return;
+        }
 
-    const overlay = document.createElement('div');
-    overlay.id = 'phishing-guard-overlay';
+        if (document.getElementById('phishing-guard-overlay')) return;
 
-    // Styles
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100vw';
-    overlay.style.height = '100vh';
-    overlay.style.zIndex = '99999999';
-    overlay.style.backgroundColor = 'rgba(255, 255, 255, 0.4)';
-    overlay.style.backdropFilter = 'blur(20px)';
-    overlay.style.WebkitBackdropFilter = 'blur(20px)';
-    overlay.style.color = '#1d1d1f';
-    overlay.style.display = 'flex';
-    overlay.style.opacity = '0';
-    overlay.style.transition = 'opacity 0.6s ease';
-    overlay.style.flexDirection = 'column';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.fontFamily = "'Inter', -apple-system, sans-serif";
-    overlay.style.textAlign = 'center';
+        const overlay = document.createElement('div');
+        overlay.id = 'phishing-guard-overlay';
 
-    const color = type === 'phishing' ? '#f5576c' : '#fda085';
-    const titleText = type === 'phishing' ? 'PHISHING DETECTED' : 'SUSPICIOUS SITE';
-    const msgText = type === 'phishing'
-        ? 'This website has been identified as a potential phishing attack. Access is restricted to protect your data.'
-        : 'This website shows suspicious behavior. Proceed with caution.';
+        // Styles
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.zIndex = '99999999';
+        overlay.style.backgroundColor = 'rgba(255, 255, 255, 0.4)';
+        overlay.style.backdropFilter = 'blur(20px)';
+        overlay.style.WebkitBackdropFilter = 'blur(20px)';
+        overlay.style.color = '#1d1d1f';
+        overlay.style.display = 'flex';
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.6s ease';
+        overlay.style.flexDirection = 'column';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.fontFamily = "'Inter', -apple-system, sans-serif";
+        overlay.style.textAlign = 'center';
 
-    overlay.innerHTML = `
+        const color = type === 'phishing' ? '#f5576c' : '#fda085';
+        const titleText = type === 'phishing' ? 'PHISHING DETECTED' : 'SUSPICIOUS SITE';
+        const msgText = type === 'phishing'
+            ? 'This website has been identified as a potential phishing attack. Access is restricted to protect your data.'
+            : 'This website shows suspicious behavior. Proceed with caution.';
+
+        overlay.innerHTML = `
         <div style="max-width: 550px; padding: 50px 40px; background: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.5); border-radius: 32px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); backdrop-filter: blur(10px);">
             <div style="display: flex; justify-content: center; margin-bottom: 24px;">
                 <div style="padding: 20px; background: white; border-radius: 24px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); color: ${color};">
@@ -65,30 +71,31 @@ function showOverlay(type) {
         </div>
     `;
 
-    document.body.appendChild(overlay);
+        document.body.appendChild(overlay);
 
-    // Fade in
-    setTimeout(() => overlay.style.opacity = '1', 10);
+        // Fade in
+        setTimeout(() => overlay.style.opacity = '1', 10);
 
-    // Stop scrolling
-    document.body.style.overflow = 'hidden';
+        // Stop scrolling
+        document.body.style.overflow = 'hidden';
 
-    // Event Listeners
-    document.getElementById('pg-go-back').addEventListener('click', () => {
-        if (history.length > 1) {
-            history.back();
-        } else {
-            window.location.href = 'https://www.google.com';
-        }
+        // Event Listeners
+        document.getElementById('pg-go-back').addEventListener('click', () => {
+            if (history.length > 1) {
+                history.back();
+            } else {
+                window.location.href = 'https://www.google.com';
+            }
+        });
+
+        document.getElementById('pg-ignore').addEventListener('click', () => {
+            overlay.remove();
+            document.body.style.overflow = '';
+            unblockInputs();
+        });
+
+        blockInputs();
     });
-
-    document.getElementById('pg-ignore').addEventListener('click', () => {
-        overlay.remove();
-        document.body.style.overflow = '';
-        unblockInputs();
-    });
-
-    blockInputs();
 }
 
 const blockHandlers = {

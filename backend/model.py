@@ -161,12 +161,12 @@ class PhishingModel:
             
             # Calculate Risk Score
             risk = 0
-            risk += html_features['password_fields'] * 15  # Password fields are risky
+            risk += html_features['password_fields'] * 10  # Reduced from 15
             risk += html_features['hidden_inputs'] * 5
-            risk += html_features['external_forms'] * 25   # Very suspicious
+            risk += html_features['external_forms'] * 20   # Reduced from 25
             risk += html_features['iframes'] * 10
             risk += html_features['external_scripts'] * 5
-            risk += html_features['urgency_keywords'] * 8
+            risk += html_features['urgency_keywords'] * 5  # Reduced from 8
             
             html_features['risk_score'] = min(risk, 100)  # Cap at 100
             
@@ -208,12 +208,17 @@ class PhishingModel:
         url_lower = url.lower()
 
         # 0. Allowlist (Hardware bypass for speed and safety)
-        allowlist = ['google.com', 'gmail.com', 'youtube.com', 'facebook.com', 'amazon.com', 'wikipedia.org', 'chatgpt.com', 'openai.com', 'github.com', 'render.com']
+        allowlist = [
+            'google.com', 'gmail.com', 'youtube.com', 'facebook.com', 'amazon.com', 
+            'wikipedia.org', 'chatgpt.com', 'openai.com', 'github.com', 'render.com',
+            'microsoft.com', 'apple.com', 'netflix.com', 'instagram.com', 'linkedin.com', 
+            'twitter.com', 'x.com', 'twitch.tv', 'yahoo.com', 'bing.com'
+        ]
         from urllib.parse import urlparse
         try:
             domain = urlparse(url).netloc
             if domain.startswith('www.'): domain = domain[4:]
-            if domain in allowlist or domain.endswith('.google.com'):
+            if domain in allowlist or domain.endswith('.google.com') or domain.endswith('.microsoft.com'):
                 return 'safe', 99
         except:
             pass
@@ -223,8 +228,7 @@ class PhishingModel:
         if pt_result == 'phishing':
             return 'phishing', 100
 
-        # 0.6 Keyword Heuristics (Catch-all for 'secure-login' patterns the ML might miss)
-        # 1. High-risk phrases (often used in demos or blatant phishing)
+        # 0.6 Keyword Heuristics
         high_risk_phrases = ['secure-login', 'verify-account', 'update-password', 'login-verify']
         for phrase in high_risk_phrases:
             if phrase in url_lower:
@@ -245,15 +249,15 @@ class PhishingModel:
             if html_analysis['fetched']:
                 html_risk = html_analysis['risk_score']
                 
-                # High Risk: External forms + Password fields = Almost certainly phishing
-                if html_analysis['external_forms'] > 0 and html_analysis['password_fields'] > 0:
+                # High Risk: External forms + Password fields + High Risk Score
+                if html_analysis['external_forms'] > 0 and html_analysis['password_fields'] > 0 and html_risk > 60:
                     print(f"HTML RED FLAG: External form + password field detected!")
                     return 'phishing', max(html_risk, 92)
                 
-                # Medium-High Risk: Many suspicious indicators
-                if html_risk >= 60:
+                # Tuned Thresholds
+                if html_risk >= 70:
                     return 'phishing', html_risk
-                elif html_risk >= 35:
+                elif html_risk >= 45:
                     return 'suspicious', html_risk
         # --- End HTML Analysis ---
 

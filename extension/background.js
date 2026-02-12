@@ -77,6 +77,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function analyzeUrl(tabId, url) {
+    // Check if protection is enabled before proceeding
+    const settings = await chrome.storage.sync.get({ protectionEnabled: true });
+    if (!settings.protectionEnabled) {
+        console.log("Protection disabled, skipping analysis for:", url);
+        return;
+    }
+
     // Set initial loading state
     chrome.action.setBadgeText({ text: "...", tabId });
     chrome.action.setBadgeBackgroundColor({ color: "#888", tabId });
