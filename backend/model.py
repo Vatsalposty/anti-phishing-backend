@@ -209,17 +209,22 @@ class PhishingModel:
 
         # 0. Allowlist (Hardware bypass for speed and safety)
         allowlist = [
-            'google.com', 'gmail.com', 'youtube.com', 'facebook.com', 'amazon.com', 
+            'google.com', 'gmail.com', 'youtube.com', 'facebook.com', 'amazon.com', 'amazon.in',
             'wikipedia.org', 'chatgpt.com', 'openai.com', 'github.com', 'render.com',
             'microsoft.com', 'apple.com', 'netflix.com', 'instagram.com', 'linkedin.com', 
-            'twitter.com', 'x.com', 'twitch.tv', 'yahoo.com', 'bing.com'
+            'twitter.com', 'x.com', 'twitch.tv', 'yahoo.com', 'bing.com', 'flipkart.com',
+            'myntra.com', 'ajio.com', 'snapdeal.com'
         ]
         from urllib.parse import urlparse
         try:
             domain = urlparse(url).netloc
             if domain.startswith('www.'): domain = domain[4:]
-            if domain in allowlist or domain.endswith('.google.com') or domain.endswith('.microsoft.com'):
-                return 'safe', 99
+            
+            # Check if domain matches or matches a subdomain of an allowlisted site
+            # Logic: exact match OR ends with .domain (e.g. support.google.com)
+            for trusted in allowlist:
+                if domain == trusted or domain.endswith('.' + trusted):
+                    return 'safe', 99
         except:
             pass
 
