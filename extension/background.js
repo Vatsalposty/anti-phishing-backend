@@ -120,16 +120,22 @@ async function analyzeUrl(tabId, url) {
 
         // Active Alert: Send message to Content Script
         if (result.status === 'phishing') {
-            chrome.tabs.sendMessage(tabId, { action: "SHOW_ALERT", type: "phishing" })
-                .catch(() => console.log("Tab probably not ready for alert"));
+            chrome.tabs.sendMessage(tabId, {
+                action: "SHOW_ALERT",
+                type: "phishing",
+                reason: result.reason
+            }).catch(() => console.log("Tab probably not ready for alert"));
 
             // Increment blocked count
             chrome.storage.local.get({ blockedCount: 0 }, (items) => {
                 chrome.storage.local.set({ blockedCount: items.blockedCount + 1 });
             });
         } else if (result.status === 'suspicious') {
-            chrome.tabs.sendMessage(tabId, { action: "SHOW_ALERT", type: "suspicious" })
-                .catch(() => console.log("Tab probably not ready for alert"));
+            chrome.tabs.sendMessage(tabId, {
+                action: "SHOW_ALERT",
+                type: "suspicious",
+                reason: result.reason
+            }).catch(() => console.log("Tab probably not ready for alert"));
         }
 
 

@@ -4,11 +4,11 @@ console.log("Anti-Phishing Guard: Content script active");
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "SHOW_ALERT") {
-        showOverlay(request.type);
+        showOverlay(request.type, request.reason);
     }
 });
 
-function showOverlay(type) {
+function showOverlay(type, reason) {
     chrome.storage.sync.get({ protectionEnabled: true }, (items) => {
         if (!items.protectionEnabled) {
             console.log("Anti-Phishing Guard: Protection disabled, suppressing overlay.");
@@ -46,6 +46,13 @@ function showOverlay(type) {
             ? 'This website has been identified as a potential phishing attack. Access is restricted to protect your data.'
             : 'This website shows suspicious behavior. Proceed with caution.';
 
+        const reasonHTML = reason ? `
+            <div style="margin-top: -12px; margin-bottom: 24px; padding: 8px 16px; background: rgba(0,0,0,0.03); border-radius: 8px; display: inline-block;">
+                <span style="font-weight: 700; color: ${color}; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">DETECTION REASON:</span>
+                <span style="font-weight: 500; color: #333; font-size: 15px; margin-left: 6px;">${reason}</span>
+            </div>
+        ` : '';
+
         overlay.innerHTML = `
         <div style="max-width: 550px; padding: 50px 40px; background: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.5); border-radius: 32px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); backdrop-filter: blur(10px);">
             <div style="display: flex; justify-content: center; margin-bottom: 24px;">
@@ -59,6 +66,7 @@ function showOverlay(type) {
             </div>
             <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 16px; letter-spacing: -0.04em; color: #000;">${titleText}</h1>
             <p style="font-size: 18px; line-height: 1.6; color: #515154; margin-bottom: 32px; font-weight: 500;">${msgText}</p>
+            ${reasonHTML}
             
             <div style="display: flex; flex-direction: column; gap: 14px; align-items: center;">
                 <button id="pg-go-back" style="width: 100%; max-width: 300px; padding: 18px; font-size: 18px; font-weight: 700; border-radius: 20px; border: none; cursor: pointer; background: #000; color: white; transition: all 0.2s ease; box-shadow: 0 10px 20px rgba(0,0,0,0.1);">
