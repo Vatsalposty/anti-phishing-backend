@@ -222,37 +222,33 @@ class PhishingModel:
 
     def predict(self, url: str):
         url_lower = url.lower()
+        reason = "Unknown"
 
         # 0. Allowlist (Hardware bypass for speed and safety)
-        # Check if domain found in our safe_domains dataset
         from urllib.parse import urlparse
         try:
             domain = urlparse(url).netloc
             if domain.startswith('www.'): domain = domain[4:]
             
-            # Check for exact match or subdomain overlap
-            # 1. Exact match in set (O(1))
             if domain in self.safe_domains:
-                return 'safe', 99
+                return 'safe', 99, "Trusted Domain (Allowlist)"
             
-            # 2. Check for subdomains (e.g. pay.amazon.in)
-            # This is slower but necessary. optimize by checking only if needed.
             for trusted in self.safe_domains:
                 if domain.endswith('.' + trusted):
-                    return 'safe', 99
+                    return 'safe', 99, "Trusted Subdomain (Allowlist)"
         except:
             pass
 
         # 0.5 Check External DBs (PhishTank)
         pt_result = self.check_phishtank(url)
         if pt_result == 'phishing':
-            return 'phishing', 100
+            return 'phishing', 100, "Flagged by PhishTank Database"
 
         # 0.6 Keyword Heuristics
         high_risk_phrases = ['secure-login', 'verify-account', 'update-password', 'login-verify']
         for phrase in high_risk_phrases:
             if phrase in url_lower:
-                return 'phishing', 90
+                return 'phishing', 90, f"Suspicious Keyword: '{phrase}'"
         
         # 2. Localhost/IP specific check for demos
         is_local = 'localhost' in url_lower or '127.0.0.1' in url_lower
@@ -260,10 +256,9 @@ class PhishingModel:
             demo_keywords = ['login', 'verify', 'secure', 'account']
             if any(k in url_lower for k in demo_keywords):
                 print(f"Demo Detection: Flagging local URL {url}")
-                return 'suspicious', 85
+                return 'suspicious', 85, "Local Test Detection (Demo Mode)"
 
         # --- NEW: HTML Content Analysis ---
-        # Skip for localhost to avoid self-request loops during dev
         if not is_local:
             html_analysis = self.analyze_html_content(url)
             if html_analysis['fetched']:
@@ -272,13 +267,13 @@ class PhishingModel:
                 # High Risk: External forms + Password fields + High Risk Score
                 if html_analysis['external_forms'] > 0 and html_analysis['password_fields'] > 0 and html_risk > 60:
                     print(f"HTML RED FLAG: External form + password field detected!")
-                    return 'phishing', max(html_risk, 92)
+                    return 'phishing', max(html_risk, 92), "External Password Form Detected"
                 
                 # Tuned Thresholds
                 if html_risk >= 70:
-                    return 'phishing', html_risk
+                    return 'phishing', html_risk, "High Risk HTML Content"
                 elif html_risk >= 45:
-                    return 'suspicious', html_risk
+                    return 'suspicious', html_risk, "Suspicious HTML Elements"
         # --- End HTML Analysis ---
 
         # 1. Use ML Model if available
@@ -286,25 +281,22 @@ class PhishingModel:
             try:
                 features = np.array([self.extract_features(url)])
                 prediction = self.model.predict(features)[0]
-                # In our training: 0=Safe, 1=Phishing
                 if prediction == 1:
-                    # Get probability if supported
                     try:
                         probs = self.model.predict_proba(features)[0]
                         confidence = int(probs[1] * 100)
                     except:
                         confidence = 90
-                    return 'phishing', confidence
+                    return 'phishing', confidence, "AI Model Detection Pattern"
                 else:
-                     return 'safe', 95
+                     return 'safe', 95, "Safe (AI Verification)"
             except Exception as e:
                 print(f"Prediction Error: {e}")
-                # Fallthrough to heuristic
 
         # 2. Heuristic Fallback (Simple Keywords)
         phishing_keywords = ['login', 'verify', 'account', 'secure', 'bank', 'confirm']
         for kw in phishing_keywords:
             if kw in url_lower:
-                return 'suspicious', 70
+                return 'suspicious', 70, f"Suspicious Keyword: '{kw}'"
 
-        return 'safe', 80
+        return 'safe', 80, "No Threats Found"

@@ -46,6 +46,7 @@ class AnalyzeResponse(BaseModel):
     url: str
     status: str # "safe", "phishing", "suspicious"
     confidence: int # 0-100
+    reason: str # Description of detection
 
 class ReportRequest(BaseModel):
     url: str
@@ -61,7 +62,7 @@ def analyze_url(request: AnalyzeRequest):
     
     try:
         # Prediction
-        result, confidence = model.predict(request.url)
+        result, confidence, reason = model.predict(request.url)
         
         # Log to Firebase (fire and forget or async ideally, but sync for now)
         try:
@@ -73,7 +74,8 @@ def analyze_url(request: AnalyzeRequest):
         return AnalyzeResponse(
             url=request.url,
             status=result,
-            confidence=confidence
+            confidence=confidence,
+            reason=reason
         )
     except Exception as e:
         logger.error(f"Error analyzing URL: {e}")

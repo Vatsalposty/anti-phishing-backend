@@ -161,6 +161,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         const footerText = document.querySelector('footer span');
         const pulseDot = document.querySelector('.pulse-dot');
 
+        // ... existing vars ...
+        const reasonBox = document.getElementById('reason-box');
+        const reasonText = document.getElementById('detection-reason');
+
+        // Reset
+        if (reasonBox) reasonBox.style.display = 'none';
+
+        if (data.reason) {
+            if (reasonBox) reasonBox.style.display = 'flex';
+            if (reasonText) reasonText.textContent = data.reason;
+        }
+
         if (data.status === 'phishing') {
             statusCard.classList.add('phishing');
             container.classList.add('phishing-bg');
@@ -169,6 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldAlert.style.display = 'block';
             trustScore.textContent = `${data.confidence || 10}%`;
             root.style.setProperty('--safe-gradient', 'var(--danger-gradient)');
+            if (reasonText) reasonText.style.color = '#ff6b6b';
 
             // Ensure footer reflects active protection
             footerText.textContent = "AI PROTECTION ACTIVE";
@@ -182,6 +195,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldAlert.style.display = 'block';
             trustScore.textContent = `${data.confidence || 45}%`;
             root.style.setProperty('--safe-gradient', 'var(--warning-gradient)');
+            if (reasonText) reasonText.style.color = '#f6d365';
 
             footerText.textContent = "AI PROTECTION ACTIVE";
             footerText.style.color = "var(--text-muted)";
@@ -192,6 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldCheck.style.display = 'none';
             shieldAlert.style.display = 'none';
             trustScore.textContent = '---';
+            if (reasonBox) reasonBox.style.display = 'none';
 
             footerText.textContent = "AI PROTECTION ACTIVE";
             footerText.style.color = "var(--text-muted)";
@@ -203,6 +218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldCheck.style.display = 'none';
             shieldAlert.style.display = 'block';
             trustScore.textContent = 'ERR';
+            if (reasonBox) reasonBox.style.display = 'none';
 
             footerText.textContent = "AI PROTECTION ACTIVE"; // Still active, just errored
             footerText.style.color = "var(--text-muted)";
@@ -216,6 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldAlert.style.display = 'block';
             trustScore.textContent = 'OFF';
             root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%)');
+            if (reasonBox) reasonBox.style.display = 'none';
 
             // Update Footer for Disabled State
             footerText.textContent = "PROTECTION DISABLED";
@@ -230,6 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldAlert.style.display = 'none';
             trustScore.textContent = `${data.confidence || 98}%`;
             root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)');
+            if (reasonText) reasonText.style.color = '#43e97b'; // Green text for safe reason
 
             footerText.textContent = "AI PROTECTION ACTIVE";
             footerText.style.color = "var(--text-muted)";
