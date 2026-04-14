@@ -75,6 +75,9 @@ function showOverlay(type, reason) {
                 <button id="pg-ignore" style="padding: 10px 20px; font-size: 14px; font-weight: 600; border-radius: 12px; border: 1px solid rgba(0,0,0,0.1); background: transparent; color: #8b949e; cursor: pointer; transition: all 0.2s;">
                     Bypass Warning (Testing)
                 </button>
+                <p style="margin-top: 8px; font-size: 13px; font-weight: 600; color: #ff6b6b; max-width: 400px; line-height: 1.4;">
+                    If this page is safe, copy its domain and add it to "Trusted Domains (Allowlist)" in Settings to permanently remove this warning.
+                </p>
             </div>
         </div>
     `;
