@@ -167,7 +167,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             statusText.textContent = 'Phishing Detected';
             shieldCheck.style.display = 'none';
             shieldAlert.style.display = 'block';
-            trustScore.textContent = `${data.confidence || 10}%`;
+            let trustVal = 100 - (data.confidence || 90);
+            trustScore.textContent = `${trustVal}%`;
             root.style.setProperty('--safe-gradient', 'var(--danger-gradient)');
 
             // Ensure footer reflects active protection
@@ -180,7 +181,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             statusText.textContent = 'Suspicious Site';
             shieldCheck.style.display = 'none';
             shieldAlert.style.display = 'block';
-            trustScore.textContent = `${data.confidence || 45}%`;
+            let trustVal = 100 - (data.confidence || 55);
+            trustScore.textContent = `${trustVal}%`;
             root.style.setProperty('--safe-gradient', 'var(--warning-gradient)');
 
             footerText.textContent = "AI PROTECTION ACTIVE";

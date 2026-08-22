@@ -73,7 +73,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
         sendResponse(status);
     }
-    return true; // Keep channel open
 });
 
 async function analyzeUrl(tabId, url) {
