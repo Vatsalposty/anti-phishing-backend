@@ -24,8 +24,8 @@ app = FastAPI(title="Anti-Phishing Backend API", lifespan=lifespan)
 # Allow CORS (important for Extension to talk to localhost)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict to extension ID
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
