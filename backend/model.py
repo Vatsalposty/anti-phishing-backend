@@ -34,18 +34,11 @@ class PhishingModel:
             print(f"Error loading safe domains: {e}")
 
         try:
-            import sklearn
-            print(f"DEBUG: scikit-learn version: {sklearn.__version__}")
-            print(f"DEBUG: joblib version: {joblib.__version__}")
-            print(f"DEBUG: numpy version: {np.__version__}")
-
             if os.path.exists(model_path):
-                print(f"Loading model from {model_path} (Size: {os.path.getsize(model_path)} bytes)")
                 self.model = joblib.load(model_path)
-                print(f"Model loaded successfully from {model_path}")
+                print("Model loaded successfully.")
             else:
-                print(f"Warning: {model_path} not found. Running in Fallback Mode.")
-                print(f"Directory contents: {os.listdir(current_dir)}")
+                print("Warning: Model file not found. Running in Fallback Mode.")
         except Exception as e:
             print(f"Error loading model: {repr(e)}", flush=True)
             traceback.print_exc()
@@ -58,7 +51,7 @@ class PhishingModel:
                 try:
                     os.remove(model_path)
                     print("Deleted corrupted model file.", flush=True)
-                except:
+                except OSError:
                     pass
 
             try:

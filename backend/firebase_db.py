@@ -45,7 +45,7 @@ def log_attempt(url, status, confidence):
 
     try:
         # Use URL hash as distinct ID to avoid duplicates
-        doc_id = hashlib.md5(url.encode('utf-8')).hexdigest()
+        doc_id = hashlib.sha256(url.encode('utf-8')).hexdigest()[:32]
         doc_ref = db.collection('phishing_attempts').document(doc_id)
         
         doc_ref.set({
@@ -82,7 +82,7 @@ def log_user_report(url, reason="user_report"):
 
     try:
         # Use URL hash to separate unique reports
-        doc_id = hashlib.md5(url.encode('utf-8')).hexdigest()
+        doc_id = hashlib.sha256(url.encode('utf-8')).hexdigest()[:32]
         doc_ref = db.collection('user_reports').document(doc_id)
         
         doc_ref.set({
