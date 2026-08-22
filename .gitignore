@@ -11,3 +11,12 @@ backend/serviceAccountKey.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Models
+*.pkl
+
+# Secrets
+.env
+backend/.env
+backend/serviceAccountKey.json
+*serviceAccountKey*.json

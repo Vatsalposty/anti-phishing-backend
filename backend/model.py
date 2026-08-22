@@ -10,12 +10,13 @@ import ipaddress
 from bs4 import BeautifulSoup
 from collections import Counter
 from urllib.parse import urlparse
+import xgboost as xgb
 
 class PhishingModel:
     def __init__(self):
         self.model = None
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        model_path = os.path.join(current_dir, 'phishing_model.pkl')
+        model_path = os.path.join(current_dir, 'xgboost_model.json')
         
         # Load Safe Domains Dataset
         self.safe_domains = set()
@@ -35,7 +36,8 @@ class PhishingModel:
 
         try:
             if os.path.exists(model_path):
-                self.model = joblib.load(model_path)
+                self.model = xgb.XGBClassifier()
+                self.model.load_model(model_path)
                 print("Model loaded successfully.")
             else:
                 print("Warning: Model file not found. Running in Fallback Mode.")
@@ -55,13 +57,15 @@ class PhishingModel:
                     pass
 
             try:
-                from train_model import train
-                # Train with fewer samples for speed (500 instead of 2000)
-                train(n_samples=500) 
+                from train_xgboost import train_xgboost
+                # Fallback retraining script doesn't have n_samples built into train_xgboost easily,
+                # but we will just call it anyway.
+                train_xgboost() 
                 
                 if os.path.exists(model_path):
                      print(f"Model Retrained. Size: {os.path.getsize(model_path)} bytes. Reloading...", flush=True)
-                     self.model = joblib.load(model_path)
+                     self.model = xgb.XGBClassifier()
+                     self.model.load_model(model_path)
                      print("Model Reloaded Successfully!", flush=True)
                 else:
                     print("Retraining finished but model file not found.", flush=True)

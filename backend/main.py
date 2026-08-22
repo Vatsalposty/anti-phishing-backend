@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse, PlainTextResponse
 from model import PhishingModel
 from firebase_db import log_attempt, log_system_event, log_user_report
 import uvicorn
@@ -25,14 +26,21 @@ async def lifespan(app: FastAPI):
     logger.info("Backend shutting down...")
     log_system_event("shutdown", "Backend server stopped")
 
+def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    """Custom rate limit handler that includes CORS headers."""
+    response = JSONResponse(
+        {"detail": f"Rate limit exceeded: {exc.detail}"}, status_code=429
+    )
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Anti-Phishing Backend API", lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_exceeded_handler)
 
-# Configure CORS to restrict to extension if ID is provided
-extension_id = os.environ.get("CHROME_EXTENSION_ID")
-allowed_origins = [f"chrome-extension://{extension_id}"] if extension_id else ["*"]
+# Configure CORS unconditionally for all origins to prevent CORS errors in extensions
+allowed_origins = ["*"]
 
 # Allow CORS (important for Extension to talk to backend)
 app.add_middleware(
@@ -156,10 +164,10 @@ def get_stats(request: Request):
 # --- Auto-Retrain Endpoint (Protected by Secret Key) ---
 def background_retrain():
     try:
-        from train_model import train
+        from train_xgboost import train_xgboost
         logger.info("Retraining model via API in background...")
-        success = train()
-        if success:
+        success = train_xgboost()
+        if success is not False:
             global model
             model = PhishingModel()
             logger.info("Model retrained and reloaded successfully!")

@@ -63,7 +63,7 @@ function removeWhitelistItem(domain) {
 
 function renderWhitelist(whitelist) {
     const list = document.getElementById('whitelist-list');
-    list.innerHTML = '';
+    list.textContent = '';
 
     whitelist.forEach(domain => {
         const li = document.createElement('li');
@@ -73,7 +73,7 @@ function renderWhitelist(whitelist) {
         span.textContent = domain;
 
         const btn = document.createElement('button');
-        btn.innerHTML = '&times;';
+        btn.textContent = '×';
         btn.className = 'delete-btn';
         btn.onclick = () => removeWhitelistItem(domain);
 

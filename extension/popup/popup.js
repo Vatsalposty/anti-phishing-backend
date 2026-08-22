@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (!activeTab || !activeTab.url) return;
 
-            btn.innerHTML = '<span>Reporting...</span>';
+            btn.textContent = 'Reporting...';
             btn.disabled = true;
 
             const controller = new AbortController();
@@ -111,16 +111,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             clearTimeout(timeoutId);
 
             if (response.ok) {
-                btn.innerHTML = '<span>Reported! ✅</span>';
+                btn.textContent = 'Reported! ✅';
             } else {
                 throw new Error('Server error');
             }
         } catch (e) {
             console.error("Report failed", e);
-            btn.innerHTML = '<span>Offline ❌</span>';
+            btn.textContent = 'Offline ❌';
         } finally {
             setTimeout(() => {
-                btn.innerHTML = '<span>Report Suspicious</span>';
+                btn.textContent = 'Report Suspicious';
                 btn.disabled = false;
             }, 3000);
         }

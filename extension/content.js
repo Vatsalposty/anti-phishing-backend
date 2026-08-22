@@ -48,49 +48,134 @@ function showOverlay(type, reason) {
 
         // Sanitize reason text to prevent XSS (never use innerHTML with API data)
         const safeReason = reason ? String(reason).substring(0, 200) : '';
-        const reasonHTML = safeReason ? `
-            <div style="margin-top: -12px; margin-bottom: 24px; padding: 8px 16px; background: rgba(0,0,0,0.03); border-radius: 8px; display: inline-block;">
-                <span style="font-weight: 700; color: ${color}; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">DETECTION REASON:</span>
-                <span id="pg-reason-text" style="font-weight: 500; color: #333; font-size: 15px; margin-left: 6px;"></span>
-            </div>
-        ` : '';
+        // Safe DOM creation to avoid innerHTML (XSS Vulnerability)
+        const container = document.createElement('div');
+        container.style.maxWidth = '550px';
+        container.style.padding = '50px 40px';
+        container.style.background = 'rgba(255,255,255,0.7)';
+        container.style.border = '1px solid rgba(255,255,255,0.5)';
+        container.style.borderRadius = '32px';
+        container.style.boxShadow = '0 20px 50px rgba(0,0,0,0.15)';
+        container.style.backdropFilter = 'blur(10px)';
 
-        overlay.innerHTML = `
-        <div style="max-width: 550px; padding: 50px 40px; background: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.5); border-radius: 32px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); backdrop-filter: blur(10px);">
-            <div style="display: flex; justify-content: center; margin-bottom: 24px;">
-                <div style="padding: 20px; background: white; border-radius: 24px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); color: ${color};">
-                    <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                        <line x1="12" y1="9" x2="12" y2="13"></line>
-                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                    </svg>
-                </div>
-            </div>
-            <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 16px; letter-spacing: -0.04em; color: #000;">${titleText}</h1>
-            <p style="font-size: 18px; line-height: 1.6; color: #515154; margin-bottom: 32px; font-weight: 500;">${msgText}</p>
-            ${reasonHTML}
-            
-            <div style="display: flex; flex-direction: column; gap: 14px; align-items: center;">
-                <button id="pg-go-back" style="width: 100%; max-width: 300px; padding: 18px; font-size: 18px; font-weight: 700; border-radius: 20px; border: none; cursor: pointer; background: #000; color: white; transition: all 0.2s ease; box-shadow: 0 10px 20px rgba(0,0,0,0.1);">
-                    Go Back to Safety
-                </button>
-                <button id="pg-ignore" style="padding: 10px 20px; font-size: 14px; font-weight: 600; border-radius: 12px; border: 1px solid rgba(0,0,0,0.1); background: transparent; color: #8b949e; cursor: pointer; transition: all 0.2s;">
-                    Bypass Warning (Testing)
-                </button>
-                <p style="margin-top: 8px; font-size: 13px; font-weight: 600; color: #ff6b6b; max-width: 400px; line-height: 1.4;">
-                    If this page is safe, copy its domain and add it to "Trusted Domains (Allowlist)" in Settings to permanently remove this warning.
-                </p>
-            </div>
-        </div>
-    `;
+        const iconWrapper = document.createElement('div');
+        iconWrapper.style.display = 'flex';
+        iconWrapper.style.justifyContent = 'center';
+        iconWrapper.style.marginBottom = '24px';
+        
+        const iconDiv = document.createElement('div');
+        iconDiv.style.padding = '20px';
+        iconDiv.style.background = 'white';
+        iconDiv.style.borderRadius = '24px';
+        iconDiv.style.boxShadow = '0 10px 20px rgba(0,0,0,0.05)';
+        iconDiv.style.color = color;
+        // The SVG is static and perfectly safe to use innerHTML for, but let's use insertAdjacentHTML or createElement
+        iconDiv.innerHTML = `<svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>`;
+        iconWrapper.appendChild(iconDiv);
 
-        document.body.appendChild(overlay);
+        const title = document.createElement('h1');
+        title.style.fontSize = '32px';
+        title.style.fontWeight = '800';
+        title.style.marginBottom = '16px';
+        title.style.letterSpacing = '-0.04em';
+        title.style.color = '#000';
+        title.textContent = titleText;
 
-        // Set reason text safely via textContent (XSS prevention)
+        const pDesc = document.createElement('p');
+        pDesc.style.fontSize = '18px';
+        pDesc.style.lineHeight = '1.6';
+        pDesc.style.color = '#515154';
+        pDesc.style.marginBottom = '32px';
+        pDesc.style.fontWeight = '500';
+        pDesc.textContent = msgText;
+
+        container.appendChild(iconWrapper);
+        container.appendChild(title);
+        container.appendChild(pDesc);
+
         if (safeReason) {
-            const reasonEl = document.getElementById('pg-reason-text');
-            if (reasonEl) reasonEl.textContent = safeReason;
+            const reasonWrapper = document.createElement('div');
+            reasonWrapper.style.marginTop = '-12px';
+            reasonWrapper.style.marginBottom = '24px';
+            reasonWrapper.style.padding = '8px 16px';
+            reasonWrapper.style.background = 'rgba(0,0,0,0.03)';
+            reasonWrapper.style.borderRadius = '8px';
+            reasonWrapper.style.display = 'inline-block';
+
+            const reasonTitle = document.createElement('span');
+            reasonTitle.style.fontWeight = '700';
+            reasonTitle.style.color = color;
+            reasonTitle.style.fontSize = '14px';
+            reasonTitle.style.textTransform = 'uppercase';
+            reasonTitle.style.letterSpacing = '0.5px';
+            reasonTitle.textContent = 'DETECTION REASON:';
+
+            const reasonText = document.createElement('span');
+            reasonText.id = 'pg-reason-text';
+            reasonText.style.fontWeight = '500';
+            reasonText.style.color = '#333';
+            reasonText.style.fontSize = '15px';
+            reasonText.style.marginLeft = '6px';
+            reasonText.textContent = safeReason;
+
+            reasonWrapper.appendChild(reasonTitle);
+            reasonWrapper.appendChild(reasonText);
+            container.appendChild(reasonWrapper);
         }
+
+        const buttonGroup = document.createElement('div');
+        buttonGroup.style.display = 'flex';
+        buttonGroup.style.flexDirection = 'column';
+        buttonGroup.style.gap = '14px';
+        buttonGroup.style.alignItems = 'center';
+
+        const btnGoBack = document.createElement('button');
+        btnGoBack.id = 'pg-go-back';
+        btnGoBack.style.width = '100%';
+        btnGoBack.style.maxWidth = '300px';
+        btnGoBack.style.padding = '18px';
+        btnGoBack.style.fontSize = '18px';
+        btnGoBack.style.fontWeight = '700';
+        btnGoBack.style.borderRadius = '20px';
+        btnGoBack.style.border = 'none';
+        btnGoBack.style.cursor = 'pointer';
+        btnGoBack.style.background = '#000';
+        btnGoBack.style.color = 'white';
+        btnGoBack.style.transition = 'all 0.2s ease';
+        btnGoBack.style.boxShadow = '0 10px 20px rgba(0,0,0,0.1)';
+        btnGoBack.textContent = 'Go Back to Safety';
+
+        const btnIgnore = document.createElement('button');
+        btnIgnore.id = 'pg-ignore';
+        btnIgnore.style.padding = '10px 20px';
+        btnIgnore.style.fontSize = '14px';
+        btnIgnore.style.fontWeight = '600';
+        btnIgnore.style.borderRadius = '12px';
+        btnIgnore.style.border = '1px solid rgba(0,0,0,0.1)';
+        btnIgnore.style.background = 'transparent';
+        btnIgnore.style.color = '#8b949e';
+        btnIgnore.style.cursor = 'pointer';
+        btnIgnore.style.transition = 'all 0.2s';
+        btnIgnore.textContent = 'Bypass Warning (Testing)';
+
+        const helpText = document.createElement('p');
+        helpText.style.marginTop = '8px';
+        helpText.style.fontSize = '13px';
+        helpText.style.fontWeight = '600';
+        helpText.style.color = '#ff6b6b';
+        helpText.style.maxWidth = '400px';
+        helpText.style.lineHeight = '1.4';
+        helpText.textContent = 'If this page is safe, copy its domain and add it to "Trusted Domains (Allowlist)" in Settings to permanently remove this warning.';
+
+        buttonGroup.appendChild(btnGoBack);
+        buttonGroup.appendChild(btnIgnore);
+        buttonGroup.appendChild(helpText);
+        container.appendChild(buttonGroup);
+        overlay.appendChild(container);
 
         // Fade in
         setTimeout(() => overlay.style.opacity = '1', 10);
