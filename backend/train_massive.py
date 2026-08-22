@@ -89,8 +89,12 @@ def train_massive(csv_path="massive_dataset.csv"):
         if 'url' not in df.columns or 'label' not in df.columns:
             if 'status' in df.columns:
                 df['label'] = df['status'].map({'legitimate': 0, 'phishing': 1})
+            elif 'type' in df.columns:
+                # Kaggle 650k dataset uses 'type': benign, defacement, phishing, malware
+                print("Detected Kaggle 'type' column schema. Mapping benign->0, malicious->1.")
+                df['label'] = df['type'].apply(lambda x: 0 if x == 'benign' else 1)
             else:
-                print("ERROR: CSV must have 'url' and 'label' (or 'status') columns.")
+                print("ERROR: CSV must have 'url' and 'label' (or 'status'/'type') columns.")
                 return
                 
         df = df.dropna(subset=['label', 'url'])
@@ -143,7 +147,7 @@ def train_massive(csv_path="massive_dataset.csv"):
         except OSError:
             pass
 
-    joblib.dump(model, MODEL_PATH)
+    joblib.dump(model, MODEL_PATH, compress=3)
     print(f"\nNew massive model saved to {MODEL_PATH} ({os.path.getsize(MODEL_PATH)} bytes)")
     
     print(f"\n{'='*60}")
