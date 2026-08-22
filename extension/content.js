@@ -177,6 +177,13 @@ function showOverlay(type, reason) {
         container.appendChild(buttonGroup);
         overlay.appendChild(container);
 
+        // Append to DOM!
+        if (document.body) {
+            document.body.appendChild(overlay);
+        } else {
+            document.documentElement.appendChild(overlay);
+        }
+
         // Fade in
         setTimeout(() => overlay.style.opacity = '1', 10);
 

@@ -11,6 +11,7 @@
     "description": "Premium AI-powered protection against phishing attacks.",
     "permissions": [
         "activeTab",
+        "tabs",
         "scripting",
         "storage"
     ],
