@@ -154,9 +154,24 @@ def get_stats(request: Request):
     }
 
 # --- Auto-Retrain Endpoint (Protected by Secret Key) ---
+def background_retrain():
+    try:
+        from train_model import train
+        logger.info("Retraining model via API in background...")
+        success = train()
+        if success:
+            global model
+            model = PhishingModel()
+            logger.info("Model retrained and reloaded successfully!")
+            log_system_event("retrain", "Model retrained successfully via API")
+        else:
+            logger.error("Training failed — not enough data")
+    except Exception as e:
+        logger.error(f"Retraining error: {e}")
+
 @app.post("/retrain")
 @limiter.limit("2/hour")
-def retrain_model(request: Request):
+def retrain_model(request: Request, background_tasks: BackgroundTasks):
     """Trigger model retraining. Protected by RETRAIN_SECRET env var."""
     # Verify authorization
     retrain_secret = os.environ.get("RETRAIN_SECRET")
@@ -167,26 +182,8 @@ def retrain_model(request: Request):
     if auth_header != f"Bearer {retrain_secret}":
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    try:
-        from train_model import train
-        logger.info("Retraining model via API...")
-        success = train()
-
-        if success:
-            # Reload the model in memory
-            global model
-            model = PhishingModel()
-            logger.info("Model retrained and reloaded successfully!")
-            background_tasks = BackgroundTasks()
-            log_system_event("retrain", "Model retrained successfully via API")
-            return {"status": "success", "message": "Model retrained and reloaded"}
-        else:
-            raise HTTPException(status_code=500, detail="Training failed — not enough data")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Retraining error: {e}")
-        raise HTTPException(status_code=500, detail="Internal retraining error")
+    background_tasks.add_task(background_retrain)
+    return {"status": "success", "message": "Model retraining started in the background"}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
