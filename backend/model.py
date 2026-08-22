@@ -5,6 +5,9 @@ import joblib
 import numpy as np
 import traceback
 import math
+import socket
+import ipaddress
+from bs4 import BeautifulSoup
 from collections import Counter
 from urllib.parse import urlparse
 
@@ -112,9 +115,30 @@ class PhishingModel:
         
         return features
 
+    def is_safe_url(self, url):
+        """SSRF Protection: Prevent fetching internal/private IP addresses"""
+        try:
+            parsed = urlparse(url)
+            domain = parsed.hostname
+            if not domain:
+                return False
+            
+            # Resolve domain to IP
+            ip_addr = socket.gethostbyname(domain)
+            ip_obj = ipaddress.ip_address(ip_addr)
+            
+            # Check if IP is private, loopback, or otherwise restricted
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved or ip_obj.is_link_local:
+                print(f"SSRF BLOCK: Prevented request to internal IP {ip_addr} for {url}")
+                return False
+            return True
+        except Exception as e:
+            print(f"SSRF Check failed for {url}: {e}")
+            return False
+
     def analyze_html_content(self, url):
         """
-        Fetches webpage HTML and extracts phishing-related features.
+        Fetches webpage HTML and extracts phishing-related features using BeautifulSoup.
         Returns a dict with feature scores and a risk_score (0-100).
         """
         html_features = {
@@ -128,6 +152,9 @@ class PhishingModel:
             'fetched': False
         }
         
+        if not self.is_safe_url(url):
+            return html_features
+            
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -137,34 +164,41 @@ class PhishingModel:
             if response.status_code != 200:
                 return html_features
             
-            html = response.text.lower()
             html_features['fetched'] = True
+            soup = BeautifulSoup(response.text, 'html.parser')
+            parsed_url = urlparse(url)
             
-            # 1. Count password fields (credential harvesting indicator)
-            html_features['password_fields'] = len(re.findall(r'type\s*=\s*["\']?password', html))
+            # 1. Count password fields
+            password_inputs = soup.find_all('input', type=lambda t: t and t.lower() == 'password')
+            html_features['password_fields'] = len(password_inputs)
             
-            # 2. Count hidden inputs (often used to pass stolen data)
-            html_features['hidden_inputs'] = len(re.findall(r'type\s*=\s*["\']?hidden', html))
+            # 2. Count hidden inputs
+            hidden_inputs = soup.find_all('input', type=lambda t: t and t.lower() == 'hidden')
+            html_features['hidden_inputs'] = len(hidden_inputs)
             
             # 3. Check for forms posting to external domains
-            form_actions = re.findall(r'<form[^>]*action\s*=\s*["\']?(https?://[^"\'>\s]+)', html)
-            parsed_url = urlparse(url)
-            for action in form_actions:
-                action_domain = urlparse(action).netloc
-                if action_domain and action_domain != parsed_url.netloc:
-                    html_features['external_forms'] += 1
+            forms = soup.find_all('form', action=True)
+            for form in forms:
+                action = form.get('action', '')
+                if action.startswith('http'):
+                    action_domain = urlparse(action).netloc
+                    if action_domain and action_domain != parsed_url.netloc:
+                        html_features['external_forms'] += 1
             
-            # 4. Count iframes (can hide malicious content)
-            html_features['iframes'] = len(re.findall(r'<iframe', html))
+            # 4. Count iframes
+            html_features['iframes'] = len(soup.find_all('iframe'))
             
             # 5. Count external scripts
-            scripts = re.findall(r'<script[^>]*src\s*=\s*["\']?(https?://[^"\'>\s]+)', html)
-            for script_src in scripts:
-                script_domain = urlparse(script_src).netloc
-                if script_domain and script_domain != parsed_url.netloc:
-                    html_features['external_scripts'] += 1
+            scripts = soup.find_all('script', src=True)
+            for script in scripts:
+                src = script.get('src', '')
+                if src.startswith('http'):
+                    script_domain = urlparse(src).netloc
+                    if script_domain and script_domain != parsed_url.netloc:
+                        html_features['external_scripts'] += 1
             
-            # 6. Urgency/Fear keywords (psychological manipulation)
+            # 6. Urgency/Fear keywords
+            html_text = soup.get_text().lower()
             urgency_keywords = [
                 'verify your account', 'confirm your identity', 'update your password',
                 'suspend', 'locked', 'unauthorized', 'expire', 'immediately',
@@ -172,19 +206,19 @@ class PhishingModel:
                 'your account will be', 'security alert', 'unusual activity'
             ]
             for keyword in urgency_keywords:
-                if keyword in html:
+                if keyword in html_text:
                     html_features['urgency_keywords'] += 1
             
             # Calculate Risk Score
             risk = 0
-            risk += html_features['password_fields'] * 10  # Reduced from 15
+            risk += html_features['password_fields'] * 10
             risk += html_features['hidden_inputs'] * 5
-            risk += html_features['external_forms'] * 20   # Reduced from 25
+            risk += html_features['external_forms'] * 20
             risk += html_features['iframes'] * 10
             risk += html_features['external_scripts'] * 5
-            risk += html_features['urgency_keywords'] * 5  # Reduced from 8
+            risk += html_features['urgency_keywords'] * 5
             
-            html_features['risk_score'] = min(risk, 100)  # Cap at 100
+            html_features['risk_score'] = min(risk, 100)
             
             print(f"HTML Analysis for {url}: {html_features}")
             
@@ -196,15 +230,19 @@ class PhishingModel:
         return html_features
 
     def check_phishtank(self, url):
-        """Checks URL against PhishTank API (Free)"""
+        """Checks URL against PhishTank API"""
         try:
-            # Note: For high volume, use an API key from PhishTank
             api_url = "https://checkurl.phishtank.com/checkurl/"
             data = {
                 'url': url,
                 'format': 'json',
             }
-            # Use a descriptive user agent as requested by PhishTank
+            
+            # Add API Key if configured
+            api_key = os.environ.get("PHISHTANK_API_KEY")
+            if api_key:
+                data['app_key'] = api_key
+
             headers = {
                 'User-Agent': 'phishtank/anti-phishing-ai-guard-v1'
             }
