@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, field_validator
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -41,6 +43,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security Headers Middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 @app.api_route("/", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "active", "service": "Anti-Phishing Backend"}
@@ -53,6 +67,15 @@ class AnalyzeRequest(BaseModel):
     url: str
     features: dict = None
 
+    @field_validator('url')
+    @classmethod
+    def validate_url(cls, v):
+        if len(v) > 2048:
+            raise ValueError('URL exceeds maximum length of 2048 characters')
+        if not v.startswith(('http://', 'https://')):
+            raise ValueError('URL must start with http:// or https://')
+        return v
+
 class AnalyzeResponse(BaseModel):
     url: str
     status: str # "safe", "phishing", "suspicious"
@@ -62,6 +85,22 @@ class AnalyzeResponse(BaseModel):
 class ReportRequest(BaseModel):
     url: str
     reason: str = "user_report"
+
+    @field_validator('url')
+    @classmethod
+    def validate_url(cls, v):
+        if len(v) > 2048:
+            raise ValueError('URL exceeds maximum length of 2048 characters')
+        if not v.startswith(('http://', 'https://')):
+            raise ValueError('URL must start with http:// or https://')
+        return v
+
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        if len(v) > 500:
+            raise ValueError('Reason exceeds maximum length of 500 characters')
+        return v
 
 # --- Endpoints ---
 
@@ -91,7 +130,7 @@ def analyze_url(request: Request, body: AnalyzeRequest, background_tasks: Backgr
         )
     except Exception as e:
         logger.error(f"Error analyzing URL: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal analysis error")
 
 @app.post("/report")
 @limiter.limit("30/minute")
@@ -104,10 +143,9 @@ def report_url(request: Request, body: ReportRequest, background_tasks: Backgrou
         logger.error(f"Error logging report: {e}")
         raise HTTPException(status_code=500, detail="Failed to log report")
 
-@app.api_route("/stats", methods=["GET", "HEAD", "POST", "OPTIONS"])
-def get_stats():
-    # In a real app, this would fetch from Firestore
-    # For now, we return mock/example stats
+@app.api_route("/stats", methods=["GET", "HEAD"])
+@limiter.limit("30/minute")
+def get_stats(request: Request):
     return {
         "total_scans": 1245,
         "threats_blocked": 87,

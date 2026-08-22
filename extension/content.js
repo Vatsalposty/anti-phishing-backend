@@ -46,10 +46,12 @@ function showOverlay(type, reason) {
             ? 'This website has been identified as a potential phishing attack. Access is restricted to protect your data.'
             : 'This website shows suspicious behavior. Proceed with caution.';
 
-        const reasonHTML = reason ? `
+        // Sanitize reason text to prevent XSS (never use innerHTML with API data)
+        const safeReason = reason ? String(reason).substring(0, 200) : '';
+        const reasonHTML = safeReason ? `
             <div style="margin-top: -12px; margin-bottom: 24px; padding: 8px 16px; background: rgba(0,0,0,0.03); border-radius: 8px; display: inline-block;">
                 <span style="font-weight: 700; color: ${color}; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">DETECTION REASON:</span>
-                <span style="font-weight: 500; color: #333; font-size: 15px; margin-left: 6px;">${reason}</span>
+                <span id="pg-reason-text" style="font-weight: 500; color: #333; font-size: 15px; margin-left: 6px;"></span>
             </div>
         ` : '';
 
@@ -83,6 +85,12 @@ function showOverlay(type, reason) {
     `;
 
         document.body.appendChild(overlay);
+
+        // Set reason text safely via textContent (XSS prevention)
+        if (safeReason) {
+            const reasonEl = document.getElementById('pg-reason-text');
+            if (reasonEl) reasonEl.textContent = safeReason;
+        }
 
         // Fade in
         setTimeout(() => overlay.style.opacity = '1', 10);
