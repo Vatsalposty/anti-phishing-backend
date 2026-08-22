@@ -122,7 +122,7 @@ def train_massive(csv_path="massive_dataset.csv"):
 
     print("\nTraining Random Forest Classifier (300 trees)...")
     model = RandomForestClassifier(
-        n_estimators=300, # Increased for massive datasets
+        n_estimators=200, # Decreased to keep model size under 100MB GitHub limit
         max_depth=25,
         min_samples_split=5,
         min_samples_leaf=2,
