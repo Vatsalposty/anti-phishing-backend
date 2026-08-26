@@ -113,9 +113,7 @@ async function analyzeUrl(tabId, url) {
         chrome.runtime.sendMessage({
             action: "update_status",
             data: result
-        }).catch(() => {
-            // Popup likely closed, ignore
-        });
+        }, () => chrome.runtime.lastError);
 
         // Active Alert: Send message to Content Script
         if (result.status === 'phishing') {
@@ -123,7 +121,7 @@ async function analyzeUrl(tabId, url) {
                 action: "SHOW_ALERT",
                 type: "phishing",
                 reason: result.reason
-            }).catch(() => console.log("Tab probably not ready for alert"));
+            }, () => chrome.runtime.lastError);
 
             // Increment blocked count
             chrome.storage.local.get({ blockedCount: 0 }, (items) => {
@@ -134,7 +132,7 @@ async function analyzeUrl(tabId, url) {
                 action: "SHOW_ALERT",
                 type: "suspicious",
                 reason: result.reason
-            }).catch(() => console.log("Tab probably not ready for alert"));
+            }, () => chrome.runtime.lastError);
         }
 
 
@@ -148,7 +146,7 @@ async function analyzeUrl(tabId, url) {
         chrome.runtime.sendMessage({
             action: "update_status",
             data: { status: "error", error: "Backend Disconnected" }
-        }).catch(() => { });
+        }, () => chrome.runtime.lastError);
     }
 }
 
