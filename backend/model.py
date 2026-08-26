@@ -208,12 +208,12 @@ class PhishingModel:
             
             # Calculate Risk Score
             risk = 0
-            risk += html_features['password_fields'] * 10
-            risk += html_features['hidden_inputs'] * 5
-            risk += html_features['external_forms'] * 20
-            risk += html_features['iframes'] * 10
-            risk += html_features['external_scripts'] * 5
-            risk += html_features['urgency_keywords'] * 5
+            risk += html_features['password_fields'] * 15
+            risk += min(html_features['hidden_inputs'] * 1, 10)  # Common in modern web, cap at 10
+            risk += html_features['external_forms'] * 25
+            risk += min(html_features['iframes'] * 2, 10) # Cap at 10
+            risk += min(html_features['external_scripts'] * 1, 10) # Cap at 10
+            risk += html_features['urgency_keywords'] * 10
             
             html_features['risk_score'] = min(risk, 100)
             
@@ -279,11 +279,11 @@ class PhishingModel:
         if pt_result == 'phishing':
             return 'phishing', 100, "Flagged by PhishTank Database"
 
-        # 0.6 Keyword Heuristics
-        high_risk_phrases = ['secure-login', 'verify-account', 'update-password', 'login-verify']
+        # 0.6 Keyword Heuristics (Very Strict)
+        high_risk_phrases = ['secure-login-update', 'verify-account-info', 'update-password-now']
         for phrase in high_risk_phrases:
             if phrase in url_lower:
-                return 'phishing', 90, f"Suspicious Keyword: '{phrase}'"
+                return 'phishing', 90, f"Suspicious Keyword Pattern: '{phrase}'"
         
         # 2. Localhost/IP specific check for demos
         is_local = 'localhost' in url_lower or '127.0.0.1' in url_lower
@@ -305,9 +305,9 @@ class PhishingModel:
                     return 'phishing', max(html_risk, 92), "External Password Form Detected"
                 
                 # Tuned Thresholds
-                if html_risk >= 70:
+                if html_risk >= 85:
                     return 'phishing', html_risk, "High Risk HTML Content"
-                elif html_risk >= 45:
+                elif html_risk >= 65:
                     return 'suspicious', html_risk, "Suspicious HTML Elements"
         # --- End HTML Analysis ---
 
@@ -328,10 +328,10 @@ class PhishingModel:
             except Exception as e:
                 print(f"Prediction Error: {e}")
 
-        # 2. Heuristic Fallback (Simple Keywords)
+        # 2. Heuristic Fallback (Simple Keywords - Lower Confidence)
         phishing_keywords = ['login', 'verify', 'account', 'secure', 'bank', 'confirm']
-        for kw in phishing_keywords:
-            if kw in url_lower:
-                return 'suspicious', 70, f"Suspicious Keyword: '{kw}'"
+        kw_count = sum(1 for kw in phishing_keywords if kw in url_lower)
+        if kw_count >= 3:
+            return 'suspicious', 60, "Multiple Suspicious Keywords in URL"
 
         return 'safe', 80, "No Threats Found"
