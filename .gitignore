@@ -1,5 +1,6 @@
 # Python / Backend
 backend/venv/
+.venv/
 backend/__pycache__/
 *.pyc
 backend/serviceAccountKey.json
@@ -12,8 +13,12 @@ backend/serviceAccountKey.json
 .DS_Store
 Thumbs.db
 
-# Models
+# Models and Datasets
 *.pkl
+*.csv
+*.zip
+xgboost_model.json
+xgboost_model.pkl
 
 # Secrets
 .env

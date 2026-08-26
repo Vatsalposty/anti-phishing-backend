@@ -89,6 +89,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error("Settings button not found in DOM");
     }
 
+    // Listen for storage changes to update UI instantly
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'sync' && changes.protectionEnabled !== undefined) {
+            if (!changes.protectionEnabled.newValue) {
+                updateUI({ status: 'disabled' });
+            } else {
+                updateUI({ status: 'scanning' });
+                chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                    const activeTab = tabs[0];
+                    if (activeTab) {
+                        chrome.runtime.sendMessage({ action: "get_status", url: activeTab.url, tabId: activeTab.id }, (response) => {
+                            if (response) updateUI(response);
+                        });
+                    }
+                });
+            }
+        }
+    });
+
     document.getElementById('report-btn').addEventListener('click', async () => {
         const btn = document.getElementById('report-btn');
 
@@ -99,50 +118,44 @@ document.addEventListener('DOMContentLoaded', async () => {
             btn.textContent = 'Reporting...';
             btn.disabled = true;
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+            chrome.storage.sync.get({ devMode: false }, async (items) => {
+                const backendUrl = items.devMode ? "http://127.0.0.1:8000" : "https://anti-phishing-api.onrender.com";
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
-            const response = await fetch('https://anti-phishing-api.onrender.com/report', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: activeTab.url, reason: "user_manual_report" }),
-                signal: controller.signal
+                try {
+                    const response = await fetch(`${backendUrl}/report`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: activeTab.url, reason: "user_manual_report" }),
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (response.ok) {
+                        btn.textContent = 'Reported! ✅';
+                    } else {
+                        throw new Error('Server error');
+                    }
+                } catch (e) {
+                    console.error("Report failed", e);
+                    btn.textContent = 'Offline ❌';
+                } finally {
+                    setTimeout(() => {
+                        btn.textContent = 'Report Suspicious';
+                        btn.disabled = false;
+                    }, 3000);
+                }
             });
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                btn.textContent = 'Reported! ✅';
-            } else {
-                throw new Error('Server error');
-            }
-        } catch (e) {
-            console.error("Report failed", e);
-            btn.textContent = 'Offline ❌';
-        } finally {
+        } catch (err) {
+            console.error("Tab query failed", err);
+            btn.textContent = 'Error';
             setTimeout(() => {
                 btn.textContent = 'Report Suspicious';
                 btn.disabled = false;
             }, 3000);
         }
-        // Listen for storage changes to update UI instantly
-        chrome.storage.onChanged.addListener((changes, area) => {
-            if (area === 'sync' && changes.protectionEnabled !== undefined) {
-                if (!changes.protectionEnabled.newValue) {
-                    updateUI({ status: 'disabled' });
-                } else {
-                    // If re-enabled, we should probably re-scan or reload, or just set to scanning
-                    updateUI({ status: 'scanning' });
-                    chrome.runtime.sendMessage({ action: "get_status", url: activeTab?.url, tabId: activeTab?.id }, (response) => {
-                        if (response) updateUI(response);
-                    });
-                }
-            }
-        });
-
-        // ... existing report button listener ...
-        document.getElementById('report-btn').addEventListener('click', async () => {
-            // ... logic ...
-        });
     }); // End of DOMContentLoaded
 
     function updateUI(data) {

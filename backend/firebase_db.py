@@ -1,9 +1,18 @@
+import os
+import json
+import datetime
+import hashlib
+import logging
+from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
-import datetime
-import os
 
-import json
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file (if it exists)
+load_dotenv()
 
 # Check if credential file exists
 CRED_PATH = "serviceAccountKey.json"
@@ -15,32 +24,30 @@ try:
     firebase_creds = os.environ.get("FIREBASE_CREDENTIALS")
     
     if firebase_creds:
-        print("Loading Firebase credentials from Environment Variable...")
+        logger.info("Loading Firebase credentials from Environment Variable...")
         cred_dict = json.loads(firebase_creds)
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
         db = firestore.client()
-        print("Firebase connected successfully (Env Var).")
+        logger.info("Firebase connected successfully (Env Var).")
         
     # 2. Try Local File (Development)
     elif os.path.exists(CRED_PATH):
-        print(f"Loading Firebase credentials from {CRED_PATH}...")
+        logger.info(f"Loading Firebase credentials from {CRED_PATH}...")
         cred = credentials.Certificate(CRED_PATH)
         firebase_admin.initialize_app(cred)
         db = firestore.client()
-        print("Firebase connected successfully (Local File).")
+        logger.info("Firebase connected successfully (Local File).")
         
     else:
-        print(f"Warning: {CRED_PATH} not found and FIREBASE_CREDENTIALS not set. Firebase logging disabled.")
+        logger.warning(f"{CRED_PATH} not found and FIREBASE_CREDENTIALS not set. Firebase logging disabled.")
 
 except Exception as e:
-    print(f"Error initializing Firebase: {e}")
-
-import hashlib
+    logger.error(f"Error initializing Firebase: {e}")
 
 def log_attempt(url, status, confidence):
     if not db:
-        print(f"[MOCK-FIREBASE] Logged: {url} | {status} | {confidence}%")
+        logger.info(f"[MOCK-FIREBASE] Logged: {url} | {status} | {confidence}%")
         return
 
     try:
@@ -55,13 +62,13 @@ def log_attempt(url, status, confidence):
             'last_seen': datetime.datetime.now(),
             'count': firestore.Increment(1)
         }, merge=True)
-        print(f"Logged/Updated Firebase: {url}")
+        logger.info(f"Logged/Updated Firebase: {url}")
     except Exception as e:
-        print(f"Error writing to Firestore: {e}")
+        logger.error(f"Error writing to Firestore: {e}")
 
 def log_system_event(event_type, details):
     if not db:
-        print(f"[MOCK-FIREBASE] System Event: {event_type} - {details}")
+        logger.info(f"[MOCK-FIREBASE] System Event: {event_type} - {details}")
         return
 
     try:
@@ -71,13 +78,13 @@ def log_system_event(event_type, details):
             'details': details,
             'timestamp': datetime.datetime.now()
         })
-        print(f"Logged System Event: {event_type}")
+        logger.info(f"Logged System Event: {event_type}")
     except Exception as e:
-        print(f"Error writing System Event to Firestore: {e}")
+        logger.error(f"Error writing System Event to Firestore: {e}")
 
 def log_user_report(url, reason="user_report"):
     if not db:
-        print(f"[MOCK-FIREBASE] User Report: {url} | {reason}")
+        logger.info(f"[MOCK-FIREBASE] User Report: {url} | {reason}")
         return
 
     try:
@@ -92,6 +99,6 @@ def log_user_report(url, reason="user_report"):
             'status': 'pending_review',
             'report_count': firestore.Increment(1)
         }, merge=True)
-        print(f"Logged/Updated User Report: {url}")
+        logger.info(f"Logged/Updated User Report: {url}")
     except Exception as e:
-        print(f"Error writing User Report to Firestore: {e}")
+        logger.error(f"Error writing User Report to Firestore: {e}")

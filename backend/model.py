@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import os
 import re
 import requests
@@ -28,31 +32,31 @@ class PhishingModel:
                     data = json.load(f)
                     for category in data.values():
                         self.safe_domains.update(category)
-                print(f"Loaded {len(self.safe_domains)} safe domains from allowlist database.")
+                logger.info(f"Loaded {len(self.safe_domains)} safe domains from allowlist database.")
             else:
-                print("Warning: safe_domains.json not found.")
+                logger.info("Warning: safe_domains.json not found.")
         except Exception as e:
-            print(f"Error loading safe domains: {e}")
+            logger.info(f"Error loading safe domains: {e}")
 
         try:
             if os.path.exists(model_path):
                 self.model = xgb.XGBClassifier()
                 self.model.load_model(model_path)
-                print("Model loaded successfully.")
+                logger.info("Model loaded successfully.")
             else:
-                print("Warning: Model file not found. Running in Fallback Mode.")
+                logger.info("Warning: Model file not found. Running in Fallback Mode.")
         except Exception as e:
-            print(f"Error loading model: {repr(e)}", flush=True)
+            logger.info(f"Error loading model: {repr(e)}")
             traceback.print_exc()
             
             # --- Self-Healing: Attempt to Retrain on Server ---
-            print("Attempting to Retrain Model on Server (Self-Healing)...", flush=True)
+            logger.info("Attempting to Retrain Model on Server (Self-Healing)...")
             
             # Delete the corrupted file if it exists to prevent repeat errors
             if os.path.exists(model_path):
                 try:
                     os.remove(model_path)
-                    print("Deleted corrupted model file.", flush=True)
+                    logger.info("Deleted corrupted model file.")
                 except OSError:
                     pass
 
@@ -63,14 +67,14 @@ class PhishingModel:
                 train_xgboost() 
                 
                 if os.path.exists(model_path):
-                     print(f"Model Retrained. Size: {os.path.getsize(model_path)} bytes. Reloading...", flush=True)
+                     logger.info(f"Model Retrained. Size: {os.path.getsize(model_path)} bytes. Reloading...")
                      self.model = xgb.XGBClassifier()
                      self.model.load_model(model_path)
-                     print("Model Reloaded Successfully!", flush=True)
+                     logger.info("Model Reloaded Successfully!")
                 else:
-                    print("Retraining finished but model file not found.", flush=True)
+                    logger.info("Retraining finished but model file not found.")
             except Exception as re_e:
-                print(f"Retraining Failed: {re_e}", flush=True)
+                logger.info(f"Retraining Failed: {re_e}")
                 traceback.print_exc()
 
     def calculate_entropy(self, text):
@@ -126,11 +130,11 @@ class PhishingModel:
             
             # Check if IP is private, loopback, or otherwise restricted
             if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved or ip_obj.is_link_local:
-                print(f"SSRF BLOCK: Prevented request to internal IP {ip_addr} for {url}")
+                logger.info(f"SSRF BLOCK: Prevented request to internal IP {ip_addr} for {url}")
                 return False
             return True
         except Exception as e:
-            print(f"SSRF Check failed for {url}: {e}")
+            logger.info(f"SSRF Check failed for {url}: {e}")
             return False
 
     def analyze_html_content(self, url):
@@ -166,18 +170,20 @@ class PhishingModel:
             parsed_url = urlparse(url)
             
             # 1. Count password fields
-            password_inputs = soup.find_all('input', type=lambda t: t and t.lower() == 'password')
+            password_inputs = [inp for inp in soup.find_all('input') if isinstance(inp.get('type'), str) and str(inp.get('type')).lower() == 'password']
             html_features['password_fields'] = len(password_inputs)
             
             # 2. Count hidden inputs
-            hidden_inputs = soup.find_all('input', type=lambda t: t and t.lower() == 'hidden')
+            hidden_inputs = [inp for inp in soup.find_all('input') if isinstance(inp.get('type'), str) and str(inp.get('type')).lower() == 'hidden']
             html_features['hidden_inputs'] = len(hidden_inputs)
             
             # 3. Check for forms posting to external domains
             forms = soup.find_all('form', action=True)
             for form in forms:
-                action = form.get('action', '')
-                if action.startswith('http'):
+                action = form.get('action')
+                if isinstance(action, list):
+                    action = action[0] if action else ''
+                if isinstance(action, str) and action.startswith('http'):
                     action_domain = urlparse(action).netloc
                     if action_domain and action_domain != parsed_url.netloc:
                         html_features['external_forms'] += 1
@@ -188,8 +194,10 @@ class PhishingModel:
             # 5. Count external scripts
             scripts = soup.find_all('script', src=True)
             for script in scripts:
-                src = script.get('src', '')
-                if src.startswith('http'):
+                src = script.get('src')
+                if isinstance(src, list):
+                    src = src[0] if src else ''
+                if isinstance(src, str) and src.startswith('http'):
                     script_domain = urlparse(src).netloc
                     if script_domain and script_domain != parsed_url.netloc:
                         html_features['external_scripts'] += 1
@@ -217,12 +225,12 @@ class PhishingModel:
             
             html_features['risk_score'] = min(risk, 100)
             
-            print(f"HTML Analysis for {url}: {html_features}")
+            logger.info(f"HTML Analysis for {url}: {html_features}")
             
         except requests.exceptions.Timeout:
-            print(f"HTML Analysis Timeout for {url}")
+            logger.info(f"HTML Analysis Timeout for {url}")
         except Exception as e:
-            print(f"HTML Analysis Error for {url}: {e}")
+            logger.info(f"HTML Analysis Error for {url}: {e}")
         
         return html_features
 
@@ -248,11 +256,11 @@ class PhishingModel:
                 result = response.json()
                 if result.get('results', {}).get('in_database'):
                     if result['results']['verified']:
-                        print(f"PhishTank ALERT: {url} is a VERIFIED phishing site.")
+                        logger.info(f"PhishTank ALERT: {url} is a VERIFIED phishing site.")
                         return 'phishing'
             return None
         except Exception as e:
-            print(f"PhishTank API Error: {e}")
+            logger.info(f"PhishTank API Error: {e}")
             return None
 
     def predict(self, url: str):
@@ -290,7 +298,7 @@ class PhishingModel:
         if is_local:
             demo_keywords = ['login', 'verify', 'secure', 'account']
             if any(k in url_lower for k in demo_keywords):
-                print(f"Demo Detection: Flagging local URL {url}")
+                logger.info(f"Demo Detection: Flagging local URL {url}")
                 return 'suspicious', 85, "Local Test Detection (Demo Mode)"
 
         # --- NEW: HTML Content Analysis ---
@@ -300,14 +308,14 @@ class PhishingModel:
                 html_risk = html_analysis['risk_score']
                 
                 # High Risk: External forms + Password fields + High Risk Score
-                if html_analysis['external_forms'] > 0 and html_analysis['password_fields'] > 0 and html_risk > 60:
-                    print(f"HTML RED FLAG: External form + password field detected!")
+                if html_analysis['external_forms'] > 0 and html_analysis['password_fields'] > 0 and html_risk > 75:
+                    logger.info(f"HTML RED FLAG: External form + password field detected!")
                     return 'phishing', max(html_risk, 92), "External Password Form Detected"
                 
                 # Tuned Thresholds
-                if html_risk >= 85:
+                if html_risk >= 95:
                     return 'phishing', html_risk, "High Risk HTML Content"
-                elif html_risk >= 65:
+                elif html_risk >= 80:
                     return 'suspicious', html_risk, "Suspicious HTML Elements"
         # --- End HTML Analysis ---
 
@@ -326,7 +334,7 @@ class PhishingModel:
                 else:
                      return 'safe', 95, "Safe (AI Verification)"
             except Exception as e:
-                print(f"Prediction Error: {e}")
+                logger.info(f"Prediction Error: {e}")
 
         # 2. Heuristic Fallback (Simple Keywords - Lower Confidence)
         phishing_keywords = ['login', 'verify', 'account', 'secure', 'bank', 'confirm']

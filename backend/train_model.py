@@ -36,8 +36,8 @@ def load_dataset_primary():
     try:
         df = pd.read_csv(path)
         df = df[['url', 'status']]
-        df['label'] = df['status'].map({'legitimate': 0, 'phishing': 1})
-        df = df.dropna(subset=['label'])
+        df['label'] = df['status'].replace({'legitimate': 0, 'phishing': 1})  # type: ignore
+        df = df[df['label'].notna()]  # type: ignore
         df['label'] = df['label'].astype(int)
         print(f"Primary dataset: {len(df)} samples")
         return df[['url', 'label']]
@@ -83,7 +83,7 @@ def load_user_reported_urls():
         urls = []
         for doc in reports:
             data = doc.to_dict()
-            if data.get('url'):
+            if data and data.get('url'):
                 urls.append({'url': data['url'], 'label': 1})  # User-reported = phishing
 
         if urls:
@@ -110,8 +110,8 @@ def train(n_samples=None):
     df_user = load_user_reported_urls()
 
     # Merge URL-based datasets
-    df_urls = pd.concat([df_primary, df_user], ignore_index=True)
-    df_urls = df_urls.drop_duplicates(subset=['url'])
+    df_urls = pd.concat([df_primary, df_user], ignore_index=True)  # type: ignore
+    df_urls = df_urls[~df_urls.duplicated(subset=['url'])]
 
     print(f"\nTotal unique URL samples: {len(df_urls)}")
     if len(df_urls) < 10:
@@ -130,7 +130,7 @@ def train(n_samples=None):
         try:
             features = pm.extract_features(row['url'])
             X_url.append(features)
-            y_url.append(int(row['label']))
+            y_url.append(int(float(str(row['label']))))
         except Exception:
             failed_count += 1
 

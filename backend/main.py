@@ -12,6 +12,10 @@ import uvicorn
 import logging
 import os
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -25,10 +29,10 @@ async def lifespan(app: FastAPI):
     logger.info("Backend shutting down...")
     log_system_event("shutdown", "Backend server stopped")
 
-def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+def custom_rate_limit_exceeded_handler(request: Request, exc: Exception):
     """Custom rate limit handler that includes CORS headers."""
     response = JSONResponse(
-        {"detail": f"Rate limit exceeded: {exc.detail}"}, status_code=429
+        {"detail": f"Rate limit exceeded: {getattr(exc, 'detail', str(exc))}"}, status_code=429
     )
     response.headers["Access-Control-Allow-Origin"] = "*"
     return response
@@ -39,17 +43,31 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, custom_rate_limit_exceeded_handler)
 
 # CORS Configuration — Production Grade
-# Chrome extensions use origin "chrome-extension://<id>" which cannot be predicted.
-# We allow all origins but restrict to only the HTTP methods and headers our API uses.
-# allow_credentials=False is correct here — we use no cookies/auth headers from browser.
+# If in production, we only allow specific origins (or no browser origins if only extension is used).
+# We allow all origins in dev mode or if explicitly required, but strict is better.
+is_prod = os.environ.get("PRODUCTION_MODE", "false").lower() == "true"
+allowed_origins = [] if is_prod else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins if allowed_origins else ["chrome-extension://*"], # Using wildcard if not possible to know ID
     allow_credentials=False,
     allow_methods=["GET", "POST", "HEAD", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
-    max_age=600,  # Cache preflight for 10 minutes
+    max_age=600,
 )
+# Note: For chrome extensions, it's often easiest to leave allow_origins=["*"] 
+# because extensions don't send an Origin header by default unless from a content script.
+# We will enforce allow_origins=["*"] but you can restrict it to your extension ID in production.
+if is_prod:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"], # Render requires * for extensions usually, but could be restricted to extension ID
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "HEAD", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
+        max_age=600,
+    )
 
 # Security Headers Middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -64,6 +82,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 
 @app.api_route("/", methods=["GET", "HEAD"])
+def root_check():
+    return {"status": "active", "service": "Anti-Phishing Backend"}
+
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "active", "service": "Anti-Phishing Backend"}
 
@@ -73,7 +95,7 @@ model = PhishingModel()
 # --- Pydantic Models ---
 class AnalyzeRequest(BaseModel):
     url: str
-    features: dict = None
+    features: dict | None = None
 
     @field_validator('url')
     @classmethod

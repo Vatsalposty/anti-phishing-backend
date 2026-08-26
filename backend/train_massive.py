@@ -88,7 +88,7 @@ def train_massive(csv_path="massive_dataset.csv"):
         # Ensure it has 'url' and 'label' columns
         if 'url' not in df.columns or 'label' not in df.columns:
             if 'status' in df.columns:
-                df['label'] = df['status'].map({'legitimate': 0, 'phishing': 1})
+                df['label'] = df['status'].replace({'legitimate': 0, 'phishing': 1})
             elif 'type' in df.columns:
                 # Kaggle 650k dataset uses 'type': benign, defacement, phishing, malware
                 print("Detected Kaggle 'type' column schema. Mapping benign->0, malicious->1.")

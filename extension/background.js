@@ -5,7 +5,7 @@ self.addEventListener('error', (event) => {
 
 const PROD_URL = "https://anti-phishing-api.onrender.com/analyze";
 const DEV_URL = "http://localhost:8000/analyze";
-let BACKEND_URL = PROD_URL;
+let BACKEND_URL = DEV_URL; // Default to local for development
 
 const tabStatus = new Map(); // Store status per tabId
 

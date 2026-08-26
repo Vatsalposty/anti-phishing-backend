@@ -13,7 +13,7 @@ def test_inference():
     
     print("\n--- Running Inference Tests ---")
     for url, expected in test_urls:
-        status, conf = model.predict(url)
+        status, conf, reason = model.predict(url)
         print(f"URL: {url}")
         print(f"  Prediction: {status} ({conf}%)")
         print(f"  Expected:   {expected}")

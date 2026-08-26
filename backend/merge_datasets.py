@@ -20,9 +20,9 @@ print("Combining datasets...")
 df_combined = pd.concat([df1, df2], ignore_index=True)
 print(f"Combined size before dedup: {len(df_combined)}")
 
-df_combined = df_combined.drop_duplicates(subset=['url'])
+df_combined = df_combined[~df_combined.duplicated(subset=['url'])]  # type: ignore
 print(f"Combined size after dedup: {len(df_combined)}")
 
 print("Saving combined dataset...")
-df_combined.to_csv('combined_massive_dataset.csv', index=False)
+df_combined.to_csv('combined_massive_dataset.csv', index=False)  # type: ignore
 print("Done! File saved as combined_massive_dataset.csv")
