@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from fastapi.responses import JSONResponse, PlainTextResponse
 from model import PhishingModel
 from firebase_db import log_attempt, log_system_event, log_user_report
 import uvicorn
@@ -39,16 +38,17 @@ app = FastAPI(title="Anti-Phishing Backend API", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, custom_rate_limit_exceeded_handler)
 
-# Configure CORS unconditionally for all origins to prevent CORS errors in extensions
-allowed_origins = ["*"]
-
-# Allow CORS (important for Extension to talk to backend)
+# CORS Configuration — Production Grade
+# Chrome extensions use origin "chrome-extension://<id>" which cannot be predicted.
+# We allow all origins but restrict to only the HTTP methods and headers our API uses.
+# allow_credentials=False is correct here — we use no cookies/auth headers from browser.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "HEAD", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    max_age=600,  # Cache preflight for 10 minutes
 )
 
 # Security Headers Middleware
