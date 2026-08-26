@@ -4,6 +4,7 @@ services:
     env: python
     region: ohio # Optional: Choose a region close to your users if possible, or leave default
     plan: free # Use the free tier
+    rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
     healthCheckPath: /health
