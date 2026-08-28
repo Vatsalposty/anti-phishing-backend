@@ -1,10 +1,13 @@
-// Background Service Worker
+// Background Service Worker — v2.1.0
+const DEBUG = false;
+function log(...args) { if (DEBUG) console.log('[APG]', ...args); }
+
 self.addEventListener('error', (event) => {
-    console.error('Service Worker Error:', event.error);
+    log('Service Worker Error:', event.error);
 });
 
 const PROD_URL = "https://anti-phishing-api.onrender.com/analyze";
-const DEV_URL = "http://localhost:8000/analyze";
+const DEV_URL = "http://127.0.0.1:8000/analyze";
 let BACKEND_URL = DEV_URL; // Default to local for development
 
 const tabStatus = new Map(); // Store status per tabId
@@ -22,7 +25,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         chrome.storage.sync.get({ devMode: false }, (items) => {
             if (items && items.devMode !== undefined) {
                 BACKEND_URL = items.devMode ? DEV_URL : PROD_URL;
-                console.log("Backend URL updated to:", BACKEND_URL);
+                log("Backend URL updated to:", BACKEND_URL);
             }
         });
     }
@@ -69,6 +72,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (!status) {
             // If we don't have status (e.g. extension restarted), start analyzing now
             status = { status: "scanning", confidence: 0 };
+            tabStatus.set(request.tabId, status);
             analyzeUrl(request.tabId, request.url);
         }
         sendResponse(status);
@@ -76,19 +80,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function analyzeUrl(tabId, url) {
-    // Check if protection is enabled before proceeding
-    const settings = await chrome.storage.sync.get({ protectionEnabled: true });
-    if (!settings.protectionEnabled) {
-        console.log("Protection disabled, skipping analysis for:", url);
+    // Check if already scanning to prevent duplicate calls
+    const currentStatus = tabStatus.get(tabId);
+    if (currentStatus && currentStatus.status === 'scanning' && currentStatus.url === url) {
+        log("Already scanning this URL, skipping duplicate request.");
         return;
     }
 
     // Set initial loading state
+    tabStatus.set(tabId, { status: 'scanning', confidence: 0, url: url });
     chrome.action.setBadgeText({ text: "...", tabId });
     chrome.action.setBadgeBackgroundColor({ color: "#888", tabId });
 
+    // Check if protection is enabled before proceeding
+    const settings = await chrome.storage.sync.get({ protectionEnabled: true });
+    if (!settings.protectionEnabled) {
+        log("Protection disabled, skipping analysis for:", url);
+        return;
+    }
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        log("Skipping internal/non-http URL:", url);
+        const safeResult = { status: "safe", confidence: 100 };
+        tabStatus.set(tabId, safeResult);
+        updateBadge(tabId, "safe");
+        return;
+    }
+
     try {
-        console.log(`Analyzing: ${url}`);
+        log(`Analyzing: ${url}`);
 
         const response = await fetch(BACKEND_URL, {
             method: 'POST',
@@ -101,13 +121,17 @@ async function analyzeUrl(tabId, url) {
         }
 
         const result = await response.json();
-        console.log("Analysis Result:", result);
+        log("Analysis Result:", result);
 
         // Store result
         tabStatus.set(tabId, result);
 
         // Update Badge
         updateBadge(tabId, result.status);
+
+        // --- v2.1: Track scan stats ---
+        incrementScanCount();
+        addToScanHistory(url, result);
 
         // Notify Popup if open
         chrome.runtime.sendMessage({
@@ -127,17 +151,24 @@ async function analyzeUrl(tabId, url) {
             chrome.storage.local.get({ blockedCount: 0 }, (items) => {
                 chrome.storage.local.set({ blockedCount: items.blockedCount + 1 });
             });
+
+            // --- v2.1: Chrome notification ---
+            showThreatNotification(url, result, 'phishing');
+
         } else if (result.status === 'suspicious') {
             chrome.tabs.sendMessage(tabId, {
                 action: "SHOW_ALERT",
                 type: "suspicious",
                 reason: result.reason
             }, () => chrome.runtime.lastError);
+
+            // --- v2.1: Chrome notification for suspicious ---
+            showThreatNotification(url, result, 'suspicious');
         }
 
 
     } catch (error) {
-        console.error("Backend connection failed:", error);
+        log("Backend connection failed:", error);
         // Fallback or offline mode could go here
         chrome.action.setBadgeText({ text: "ERR", tabId });
         chrome.action.setBadgeBackgroundColor({ color: "#000", tabId });
@@ -161,4 +192,56 @@ function updateBadge(tabId, status) {
         chrome.action.setBadgeText({ text: "OK", tabId });
         chrome.action.setBadgeBackgroundColor({ color: "#238636", tabId });
     }
+}
+
+// --- v2.1: Real Scan Counter ---
+function incrementScanCount() {
+    chrome.storage.local.get({ totalScans: 0 }, (items) => {
+        chrome.storage.local.set({ totalScans: items.totalScans + 1 });
+    });
+}
+
+// --- v2.1: Scan History (last 50 entries) ---
+function addToScanHistory(url, result) {
+    chrome.storage.local.get({ scanHistory: [] }, (items) => {
+        const history = items.scanHistory;
+        let hostname = url;
+        try { hostname = new URL(url).hostname; } catch (e) { }
+
+        history.unshift({
+            url: hostname,
+            fullUrl: url,
+            status: result.status,
+            confidence: result.confidence,
+            reason: result.reason || '',
+            timestamp: Date.now()
+        });
+
+        // Keep only last 50
+        if (history.length > 50) history.length = 50;
+
+        chrome.storage.local.set({ scanHistory: history });
+    });
+}
+
+// --- v2.1: Chrome Notification on Threat ---
+function showThreatNotification(url, result, type) {
+    let hostname = url;
+    try { hostname = new URL(url).hostname; } catch (e) { }
+
+    const title = type === 'phishing'
+        ? '🚨 Phishing Site Blocked!'
+        : '⚠️ Suspicious Site Detected';
+
+    const message = type === 'phishing'
+        ? `${hostname} has been flagged as dangerous.\n${result.reason || 'AI Detection'}`
+        : `${hostname} looks suspicious.\n${result.reason || 'Exercise caution'}`;
+
+    chrome.notifications.create(`threat-${Date.now()}`, {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: title,
+        message: message,
+        priority: 2
+    }, () => chrome.runtime.lastError);
 }

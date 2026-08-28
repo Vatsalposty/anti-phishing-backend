@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const urlObj = new URL(tab.url);
                 hostname = urlObj.hostname;
-                // Handle local files or chrome pages where hostname might be empty
                 if (!hostname) {
                     if (tab.url.startsWith('file:')) hostname = 'Local File';
                     else if (tab.url.startsWith('chrome:')) hostname = 'Chrome Page';
@@ -25,22 +24,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             chrome.storage.sync.get({ protectionEnabled: true }, (items) => {
                 if (!items.protectionEnabled) {
                     updateUI({ status: 'disabled' });
-                    // We still might want url stats if dev mode, but for main UI:
                 } else {
-                    // Determine status logic...
                     if (hostname === "Local File" || hostname === "Chrome Page" || hostname === "Extension Page") {
                         updateUI({ status: 'safe', confidence: 100 });
                     } else {
-                        // Initial scan state
                         updateUI({ status: 'scanning' });
 
-                        // Request status from background
                         chrome.runtime.sendMessage({ action: "get_status", url: tab.url, tabId: tab.id }, (response) => {
                             if (chrome.runtime.lastError) {
-                                console.error("Connection error:", chrome.runtime.lastError);
                                 updateUI({ status: 'error' });
                             } else {
-                                // Double check protection didn't turn off in the millisecond interim
                                 chrome.storage.sync.get({ protectionEnabled: true }, (current) => {
                                     if (current.protectionEnabled) {
                                         updateUI(response);
@@ -53,40 +46,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
             });
-            // Fetch Local Stats (Total Blocked)
-            chrome.storage.local.get({ blockedCount: 0 }, (items) => {
+
+            // --- v2.1: Real Stats from Local Storage ---
+            chrome.storage.local.get({ totalScans: 0, blockedCount: 0 }, (items) => {
                 const scanCountEl = document.getElementById('scan-count');
-                if (scanCountEl) scanCountEl.textContent = items.blockedCount;
+                if (scanCountEl) scanCountEl.textContent = items.totalScans;
             });
 
-            // Fetch Global Stats from Backend
-            fetch('https://anti-phishing-api.onrender.com/stats')
-                .then(res => res.json())
-                .then(stats => {
-                    console.log("Global Stats:", stats);
-                    // We could use this for something cool in the UI later
-                })
-                .catch(err => console.log("Stats fetch failed (offline or localhost dev mode)"));
         } else {
             document.getElementById('current-url').textContent = "Restricted Page";
         }
     } catch (err) {
-        console.error("Error getting tab:", err);
         document.getElementById('current-url').textContent = "Error";
     }
 
-    // Settings Button Listener
-    // Settings Button Listener
+    // Settings Button
     const settingsBtn = document.querySelector('.settings-icon');
     if (settingsBtn) {
         settingsBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            // Force open in new tab - most reliable method
             const optionsUrl = chrome.runtime.getURL('settings.html');
             window.open(optionsUrl, '_blank');
         });
-    } else {
-        console.error("Settings button not found in DOM");
+    }
+
+    // --- v2.1: History Button ---
+    const historyBtn = document.getElementById('history-btn');
+    if (historyBtn) {
+        historyBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const historyUrl = chrome.runtime.getURL('history.html');
+            window.open(historyUrl, '_blank');
+        });
     }
 
     // Listen for storage changes to update UI instantly
@@ -108,6 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Report Button
     document.getElementById('report-btn').addEventListener('click', async () => {
         const btn = document.getElementById('report-btn');
 
@@ -122,7 +114,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const backendUrl = items.devMode ? "http://127.0.0.1:8000" : "https://anti-phishing-api.onrender.com";
                 
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
 
                 try {
                     const response = await fetch(`${backendUrl}/report`, {
@@ -139,7 +131,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         throw new Error('Server error');
                     }
                 } catch (e) {
-                    console.error("Report failed", e);
                     btn.textContent = 'Offline ❌';
                 } finally {
                     setTimeout(() => {
@@ -149,14 +140,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
         } catch (err) {
-            console.error("Tab query failed", err);
             btn.textContent = 'Error';
             setTimeout(() => {
                 btn.textContent = 'Report Suspicious';
                 btn.disabled = false;
             }, 3000);
         }
-    }); // End of DOMContentLoaded
+    });
 
     function updateUI(data) {
         const statusCard = document.getElementById('status-card');
@@ -167,7 +157,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const container = document.querySelector('.container');
         const root = document.documentElement;
 
-        // Reset classes
         statusCard.classList.remove('safe', 'phishing', 'error');
         container.classList.remove('phishing-bg');
 
@@ -184,10 +173,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             trustScore.textContent = `${trustVal}%`;
             root.style.setProperty('--safe-gradient', 'var(--danger-gradient)');
 
-            // Ensure footer reflects active protection
             footerText.textContent = "AI PROTECTION ACTIVE";
             footerText.style.color = "var(--text-muted)";
-            pulseDot.style.background = "#f5576c"; // Match usage
+            pulseDot.style.background = "#f5576c";
             pulseDot.style.animation = "";
         } else if (data.status === 'suspicious') {
             statusCard.classList.add('phishing');
@@ -219,11 +207,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             shieldAlert.style.display = 'block';
             trustScore.textContent = 'ERR';
 
-            footerText.textContent = "AI PROTECTION ACTIVE"; // Still active, just errored
+            footerText.textContent = "AI PROTECTION ACTIVE";
             footerText.style.color = "var(--text-muted)";
             pulseDot.style.background = "#555";
         } else if (data.status === 'disabled') {
-            // New Disabled State
             statusCard.classList.add('error');
             statusCard.style.border = '1px solid var(--text-muted)';
             statusText.textContent = 'Protection Disabled';
@@ -232,13 +219,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             trustScore.textContent = 'OFF';
             root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%)');
 
-            // Update Footer for Disabled State
             footerText.textContent = "PROTECTION DISABLED";
             footerText.style.color = "#f5576c";
             pulseDot.style.background = "#f5576c";
             pulseDot.style.animation = 'none';
         } else {
-            // Safe
             statusCard.classList.add('safe');
             statusText.textContent = 'Safe Website';
             shieldCheck.style.display = 'block';
@@ -248,7 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             footerText.textContent = "AI PROTECTION ACTIVE";
             footerText.style.color = "var(--text-muted)";
-            pulseDot.style.background = "var(--safe-gradient)"; // Green
+            pulseDot.style.background = "var(--safe-gradient)";
             pulseDot.style.animation = "";
         }
     }

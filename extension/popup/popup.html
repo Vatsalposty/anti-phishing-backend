@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Anti-Phishing Guard</title>
     <link rel="stylesheet" href="popup.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
@@ -71,19 +70,29 @@
                     <span class="stat-value" id="trust-score">98%</span>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-label">Total Blocked</span>
-                    <span class="stat-value" id="scan-count">12</span>
+                    <span class="stat-label">Total Scans</span>
+                    <span class="stat-value" id="scan-count">0</span>
                 </div>
             </div>
 
-            <button id="report-btn" class="report-button">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
-                    <line x1="4" y1="22" x2="4" y2="15"></line>
-                </svg>
-                <span>Report Suspicious</span>
-            </button>
+            <div class="action-buttons">
+                <button id="report-btn" class="report-button">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                        <line x1="4" y1="22" x2="4" y2="15"></line>
+                    </svg>
+                    <span>Report Suspicious</span>
+                </button>
+                <button id="history-btn" class="history-button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span>Scan History</span>
+                </button>
+            </div>
         </main>
 
         <footer>

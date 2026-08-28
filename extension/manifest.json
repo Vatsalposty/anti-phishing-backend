@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Anti-Phishing AI Guard",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "minimum_chrome_version": "110",
     "offline_enabled": false,
     "icons": {
@@ -13,7 +13,8 @@
     "permissions": [
         "activeTab",
         "tabs",
-        "storage"
+        "storage",
+        "notifications"
     ],
     "host_permissions": [
         "http://*/*",

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan History — Anti-Phishing AI Guard</title>
+    <link rel="stylesheet" href="history.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L3 7V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V7L12 2Z"
+                        fill="url(#hg)" />
+                    <defs>
+                        <linearGradient id="hg" x1="3" y1="2" x2="21" y2="23" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#6e8efb" />
+                            <stop offset="1" stop-color="#a777e3" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div>
+                    <h1>Scan History</h1>
+                    <p class="subtitle">Anti-Phishing AI Guard v2.1</p>
+                </div>
+            </div>
+            <div class="header-stats">
+                <div class="stat-pill safe-pill">
+                    <span class="dot dot-safe"></span>
+                    <span id="safe-count">0</span> Safe
+                </div>
+                <div class="stat-pill danger-pill">
+                    <span class="dot dot-danger"></span>
+                    <span id="threat-count">0</span> Threats
+                </div>
+                <div class="stat-pill total-pill">
+                    <span id="total-count">0</span> Total
+                </div>
+            </div>
+        </header>
+
+        <div class="toolbar">
+            <div class="search-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" id="search-input" placeholder="Search domains...">
+            </div>
+            <div class="filter-tabs">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="safe">Safe</button>
+                <button class="filter-btn" data-filter="phishing">Phishing</button>
+                <button class="filter-btn" data-filter="suspicious">Suspicious</button>
+            </div>
+            <button id="clear-btn" class="clear-btn">Clear History</button>
+        </div>
+
+        <div id="history-list" class="history-list">
+            <!-- Populated by JS -->
+        </div>
+
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <h3>No scans yet</h3>
+            <p>Browse the web and your scan history will appear here.</p>
+        </div>
+    </div>
+
+    <script src="history.js"></script>
+</body>
+</html>
