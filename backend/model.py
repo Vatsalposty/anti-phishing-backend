@@ -354,6 +354,75 @@ class PhishingModel:
         except Exception as e:
             logger.info(f"Typosquatting Check Error: {e}")
         
+        # 0.8 Subdomain Abuse Detection (e.g., google.com.evil-site.xyz)
+        try:
+            domain_full = urlparse(url_lower).netloc
+            if domain_full.startswith('www.'): domain_full = domain_full[4:]
+            
+            for trusted in self.safe_domains:
+                # Check if a trusted brand name appears as a subdomain of a DIFFERENT domain
+                if trusted in domain_full and not domain_full.endswith(trusted):
+                    # e.g., "paypal.com.phishing-site.xyz" contains "paypal.com" but ends with ".xyz"
+                    logger.info(f"Subdomain Abuse: {domain_full} contains trusted brand '{trusted}' as subdomain")
+                    return 'phishing', 94, f"Subdomain Abuse: Impersonating {trusted}"
+        except Exception as e:
+            logger.info(f"Subdomain Abuse Check Error: {e}")
+        
+        # 0.85 URL Shortener Detection
+        url_shorteners = [
+            'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'is.gd', 'v.gd',
+            'buff.ly', 'ow.ly', 'rebrand.ly', 'bl.ink', 'short.io',
+            'cutt.ly', 'rb.gy', 'clck.ru', 'shorturl.at', 'tiny.cc'
+        ]
+        try:
+            short_domain = urlparse(url_lower).netloc
+            if short_domain.startswith('www.'): short_domain = short_domain[4:]
+            if short_domain in url_shorteners:
+                logger.info(f"URL Shortener detected: {short_domain}")
+                return 'suspicious', 65, f"Shortened URL ({short_domain}) — Cannot verify destination"
+        except:
+            pass
+        
+        # 0.9 Excessive Subdomain Depth (e.g., login.secure.bank.verify.example.com)
+        try:
+            depth_domain = urlparse(url_lower).netloc
+            subdomain_count = depth_domain.count('.')
+            if subdomain_count >= 4:
+                logger.info(f"Excessive subdomains: {depth_domain} ({subdomain_count} levels)")
+                return 'suspicious', 75, f"Suspicious URL Structure ({subdomain_count} subdomain levels)"
+        except:
+            pass
+
+        # 0.95 Path-Based Brand Impersonation (e.g., random-site.com/paypal/login)
+        try:
+            url_path = urlparse(url_lower).path.lower()
+            path_domain = urlparse(url_lower).netloc
+            if path_domain.startswith('www.'): path_domain = path_domain[4:]
+            
+            brand_names = ['paypal', 'netflix', 'amazon', 'microsoft', 'apple', 'google',
+                          'facebook', 'instagram', 'whatsapp', 'linkedin', 'twitter',
+                          'chase', 'wellsfargo', 'bankofamerica', 'hdfc', 'sbi', 'icici',
+                          'gmail', 'outlook', 'yahoo', 'icloud']
+            
+            if path_domain not in self.safe_domains:
+                for brand in brand_names:
+                    if brand in url_path and ('login' in url_path or 'verify' in url_path or 
+                                              'account' in url_path or 'secure' in url_path or
+                                              'password' in url_path or 'signin' in url_path):
+                        logger.info(f"Path Brand Impersonation: {url} has '{brand}' + login keyword in path")
+                        return 'phishing', 88, f"Brand Impersonation: '{brand}' in URL path"
+        except:
+            pass
+        
+        # 0.96 Punycode / IDN Homograph Detection (e.g., xn--pple-43d.com = аpple.com with Cyrillic 'а')
+        try:
+            idn_domain = urlparse(url_lower).netloc
+            if 'xn--' in idn_domain:
+                logger.info(f"Punycode IDN detected: {idn_domain}")
+                return 'phishing', 90, "International Domain (Punycode) — Possible Homograph Attack"
+        except:
+            pass
+        
         # 2. Localhost/IP specific check for demos
         is_local = 'localhost' in url_lower or '127.0.0.1' in url_lower
         if is_local:
@@ -362,7 +431,7 @@ class PhishingModel:
                 logger.info(f"Demo Detection: Flagging local URL {url}")
                 return 'suspicious', 85, "Local Test Detection (Demo Mode)"
 
-        # --- NEW: HTML Content Analysis ---
+        # --- HTML Content Analysis ---
         if not is_local:
             html_analysis = self.analyze_html_content(url)
             if html_analysis['fetched']:
@@ -380,7 +449,7 @@ class PhishingModel:
                     return 'suspicious', html_risk, "Suspicious HTML Elements"
         # --- End HTML Analysis ---
 
-        # 1. Use ML Model if available
+        # 3. Use ML Model if available
         if self.model:
             try:
                 features = np.array([self.extract_features(url)])
@@ -397,10 +466,13 @@ class PhishingModel:
             except Exception as e:
                 logger.info(f"Prediction Error: {e}")
 
-        # 2. Heuristic Fallback (Simple Keywords - Lower Confidence)
-        phishing_keywords = ['login', 'verify', 'account', 'secure', 'bank', 'confirm']
+        # 4. Heuristic Fallback (Expanded Keywords)
+        phishing_keywords = ['login', 'verify', 'account', 'secure', 'bank', 'confirm',
+                            'password', 'credential', 'suspend', 'locked', 'unauthorized',
+                            'wallet', 'expire', 'ssn', 'social-security', 'update-info']
         kw_count = sum(1 for kw in phishing_keywords if kw in url_lower)
-        if kw_count >= 3:
-            return 'suspicious', 60, "Multiple Suspicious Keywords in URL"
+        if kw_count >= 2:
+            return 'suspicious', 65, "Multiple Suspicious Keywords in URL"
 
         return 'safe', 80, "No Threats Found"
+
