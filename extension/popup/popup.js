@@ -107,6 +107,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (!activeTab || !activeTab.url) return;
 
+            if (!activeTab.url.startsWith('http://') && !activeTab.url.startsWith('https://')) {
+                btn.textContent = 'Cannot Report This Page';
+                setTimeout(() => {
+                    btn.textContent = 'Report Suspicious';
+                    btn.disabled = false;
+                }, 3000);
+                return;
+            }
+
             btn.textContent = 'Reporting...';
             btn.disabled = true;
 
