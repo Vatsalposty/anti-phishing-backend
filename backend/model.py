@@ -292,6 +292,67 @@ class PhishingModel:
         for phrase in high_risk_phrases:
             if phrase in url_lower:
                 return 'phishing', 90, f"Suspicious Keyword Pattern: '{phrase}'"
+                
+        # 0.7 Homoglyph & Typosquatting Detection
+        try:
+            import difflib
+            domain_to_check = urlparse(url_lower).netloc
+            if domain_to_check.startswith('www.'): domain_to_check = domain_to_check[4:]
+            
+            base_domain = domain_to_check.rsplit('.', 1)[0] if '.' in domain_to_check else domain_to_check
+            
+            # Homoglyph normalization map: characters that look alike to the human eye
+            homoglyph_map = {
+                '1': 'l', 'l': 'i', '0': 'o', '5': 's',
+                '|': 'l', '!': 'i', '@': 'a', '$': 's',
+            }
+            # Multi-char homoglyphs
+            multi_homoglyphs = {
+                'rn': 'm', 'vv': 'w', 'cl': 'd', 'nn': 'm',
+            }
+            
+            def normalize_homoglyphs(text):
+                """Convert lookalike characters to their intended form"""
+                result = text
+                # Multi-char replacements first
+                for fake, real in multi_homoglyphs.items():
+                    result = result.replace(fake, real)
+                # Single-char replacements
+                normalized = ''
+                for ch in result:
+                    normalized += homoglyph_map.get(ch, ch)
+                return normalized
+            
+            normalized_domain = normalize_homoglyphs(base_domain)
+            
+            if domain_to_check not in self.safe_domains:
+                for safe_url in self.safe_domains:
+                    safe_base = safe_url.rsplit('.', 1)[0] if '.' in safe_url else safe_url
+                    
+                    if len(base_domain) > 3 and len(safe_base) > 3:
+                        # 1. Homoglyph exact match (e.g., lnstagram → instagram)
+                        if normalized_domain == safe_base and base_domain != safe_base:
+                            logger.info(f"Homoglyph Attack: {domain_to_check} uses lookalike chars to impersonate {safe_url}")
+                            return 'phishing', 96, f"Homoglyph Attack: Impersonating {safe_url}"
+                        
+                        # 2. Exact same name, different TLD (e.g., google.biz vs google.com)
+                        if base_domain == safe_base:
+                            logger.info(f"Typosquatting Alert: {domain_to_check} mimics {safe_url}")
+                            return 'phishing', 95, f"Impersonating {safe_url} (Suspicious TLD)"
+                        
+                        # 3. Highly similar name (e.g., goooogle.com vs google.com)
+                        ratio = difflib.SequenceMatcher(None, base_domain, safe_base).ratio()
+                        if 0.80 <= ratio < 1.0:
+                            logger.info(f"Typosquatting Alert: {domain_to_check} is {ratio:.2f} similar to {safe_url}")
+                            return 'phishing', 92, f"Typosquatting: Impersonating {safe_url}"
+                        
+                        # 4. Normalized similarity (catches combined homoglyph + typosquatting)
+                        norm_ratio = difflib.SequenceMatcher(None, normalized_domain, safe_base).ratio()
+                        if 0.80 <= norm_ratio < 1.0 and norm_ratio > ratio:
+                            logger.info(f"Homoglyph+Typosquat: {domain_to_check} normalized to {normalized_domain}, {norm_ratio:.2f} similar to {safe_url}")
+                            return 'phishing', 93, f"Impersonation Attack: Mimicking {safe_url}"
+        except Exception as e:
+            logger.info(f"Typosquatting Check Error: {e}")
         
         # 2. Localhost/IP specific check for demos
         is_local = 'localhost' in url_lower or '127.0.0.1' in url_lower
