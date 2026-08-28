@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Query
+from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +13,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+from firebase_db import db
 
 # Load environment variables
 load_dotenv()
@@ -214,6 +215,78 @@ def retrain_model(request: Request, background_tasks: BackgroundTasks):
 
     background_tasks.add_task(background_retrain)
     return {"status": "success", "message": "Model retraining started in the background"}
+
+@app.get("/admin/reports", response_class=HTMLResponse)
+@limiter.limit("10/minute")
+def view_admin_reports(request: Request, key: str = Query(None)):
+    """Simple Admin Dashboard to view Firebase reports."""
+    admin_secret = os.environ.get("ADMIN_SECRET", "admin123")
+    if key != admin_secret:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    if not db:
+        return HTMLResponse("<h1>Firebase is not configured!</h1><p>Add FIREBASE_CREDENTIALS to your Render environment variables or put serviceAccountKey.json in the backend folder.</p>")
+
+    try:
+        reports_ref = db.collection('user_reports').order_by('last_reported', direction='DESCENDING').limit(100)
+        reports = reports_ref.stream()
+
+        html_content = """
+        <html>
+            <head>
+                <title>Anti-Phishing Admin</title>
+                <style>
+                    body { font-family: -apple-system, sans-serif; background: #0d1117; color: #e6edf3; padding: 40px; }
+                    h1 { color: #6e8efb; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #161b22; border-radius: 8px; overflow: hidden; }
+                    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #30363d; }
+                    th { background: #21262d; font-weight: 600; }
+                    tr:hover { background: #1c2128; }
+                    .url { color: #58a6ff; font-weight: bold; }
+                    .badge { padding: 4px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
+                    .bg-warning { background: rgba(210, 153, 34, 0.2); color: #d29922; }
+                </style>
+            </head>
+            <body>
+                <h1>🛡️ User Reports Dashboard</h1>
+                <p>Showing the 100 most recent URLs reported by users.</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Reported URL</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Count</th>
+                            <th>Last Reported</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        """
+        
+        for doc in reports:
+            data = doc.to_dict()
+            time_str = data.get('last_reported', '').strftime("%Y-%m-%d %H:%M:%S") if hasattr(data.get('last_reported'), 'strftime') else str(data.get('last_reported', 'Unknown'))
+            html_content += f"""
+                        <tr>
+                            <td class="url">{data.get('url', 'Unknown')}</td>
+                            <td>{data.get('reason', 'N/A')}</td>
+                            <td><span class="badge bg-warning">{data.get('status', 'pending')}</span></td>
+                            <td>{data.get('report_count', 1)}</td>
+                            <td>{time_str}</td>
+                        </tr>
+            """
+            
+        html_content += """
+                    </tbody>
+                </table>
+            </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Error fetching reports: {e}")
+        return HTMLResponse(f"<h1>Error</h1><p>Could not fetch reports from Firebase: {e}</p>")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
