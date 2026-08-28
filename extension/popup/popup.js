@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (settingsBtn) {
         settingsBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            const optionsUrl = chrome.runtime.getURL('settings.html');
+            const optionsUrl = chrome.runtime.getURL('pages/settings.html');
             window.open(optionsUrl, '_blank');
         });
     }
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (historyBtn) {
         historyBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            const historyUrl = chrome.runtime.getURL('history.html');
+            const historyUrl = chrome.runtime.getURL('pages/history.html');
             window.open(historyUrl, '_blank');
         });
     }

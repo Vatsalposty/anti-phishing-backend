@@ -14,11 +14,10 @@ backend/serviceAccountKey.json
 Thumbs.db
 
 # Models and Datasets
+backend/training_data/
 *.pkl
 *.csv
 *.zip
-xgboost_model.json
-xgboost_model.pkl
 
 # Secrets
 .env

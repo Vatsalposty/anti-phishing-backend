@@ -187,7 +187,7 @@ def get_stats(request: Request):
 # --- Auto-Retrain Endpoint (Protected by Secret Key) ---
 def background_retrain():
     try:
-        from train_xgboost import train_xgboost
+        from training_data.train_xgboost import train_xgboost
         logger.info("Retraining model via API in background...")
         success = train_xgboost()
         if success is not False:

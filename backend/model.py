@@ -11,6 +11,8 @@ import traceback
 import math
 import socket
 import ipaddress
+import whois
+from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from collections import Counter
 from urllib.parse import urlparse

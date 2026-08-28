@@ -8,17 +8,14 @@ echo     Anti-Phishing AI Guard - Local Backend Launcher
 echo  ===========================================================
 echo(
 
-:: ---------------------------------------------------------------
-:: 1. Activate the root virtual environment
-:: ---------------------------------------------------------------
-echo  [INFO] Activating virtual environment...
-call "%~dp0.venv\Scripts\activate.bat"
+echo  [INFO] Using global Python environment...
+python -c "import uvicorn" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo  [ERROR] Failed to activate .venv in the project root!
+    echo  [ERROR] Uvicorn is not installed in the global environment!
     pause
     exit /b 1
 )
-echo  [OK] Virtual environment activated
+echo  [OK] Dependencies verified.
 
 :: ---------------------------------------------------------------
 :: 2. Navigate to backend and start server
