@@ -263,6 +263,143 @@ class PhishingModel:
             logger.info(f"PhishTank API Error: {e}")
             return None
 
+    def analyze_domain_patterns(self, url):
+        """
+        AI-based suspicious domain pattern analysis.
+        Catches brand-new, never-seen-before phishing domains by analyzing
+        structural patterns that are common in auto-generated phishing URLs.
+        Returns: (is_suspicious: bool, confidence: int, reason: str)
+        """
+        try:
+            parsed = urlparse(url.lower())
+            domain = parsed.netloc
+            if domain.startswith('www.'): domain = domain[4:]
+            path = parsed.path
+            full_url = url.lower()
+            
+            score = 0
+            reasons = []
+            
+            base_domain = domain.rsplit('.', 1)[0] if '.' in domain else domain
+            
+            # --- Pattern 1: Random/Auto-Generated Domain Detection ---
+            # Count consonant clusters (3+ consonants in a row = likely random)
+            vowels = set('aeiou')
+            consonant_streak = 0
+            max_consonant_streak = 0
+            for ch in base_domain:
+                if ch.isalpha() and ch not in vowels:
+                    consonant_streak += 1
+                    max_consonant_streak = max(max_consonant_streak, consonant_streak)
+                else:
+                    consonant_streak = 0
+            if max_consonant_streak >= 4:
+                score += 30
+                reasons.append(f"Random character pattern ({max_consonant_streak} consonants)")
+            
+            # --- Pattern 2: Digit-Letter Mixing ---
+            # e.g., "s3cur1ty-l0gin.com" or "bank2024verify.xyz"
+            digit_count = sum(1 for c in base_domain if c.isdigit())
+            letter_count = sum(1 for c in base_domain if c.isalpha())
+            if digit_count >= 2 and letter_count >= 3 and digit_count / max(len(base_domain), 1) > 0.2:
+                score += 20
+                reasons.append("Suspicious digit-letter mixing in domain")
+            
+            # --- Pattern 3: Excessive Hyphens ---
+            # e.g., "secure-login-verify-account-now.com"
+            hyphen_count = base_domain.count('-')
+            if hyphen_count >= 3:
+                score += 25
+                reasons.append(f"Excessive hyphens ({hyphen_count})")
+            elif hyphen_count >= 2:
+                score += 10
+            
+            # --- Pattern 4: Number-Padded Brand Names ---
+            # e.g., "paypal123.com", "amazon2024.com", "netflix01.com"
+            brand_keywords = ['paypal', 'netflix', 'amazon', 'microsoft', 'apple', 'google',
+                            'facebook', 'instagram', 'whatsapp', 'linkedin', 'twitter',
+                            'chase', 'wellsfargo', 'hdfc', 'sbi', 'icici', 'gmail',
+                            'outlook', 'yahoo', 'icloud', 'uber', 'flipkart', 'paytm',
+                            'phonepe', 'razorpay', 'zerodha', 'groww', 'cred', 'spotify',
+                            'discord', 'telegram', 'snapchat', 'tiktok', 'binance',
+                            'coinbase', 'metamask', 'opensea']
+            for brand in brand_keywords:
+                if brand in base_domain and base_domain != brand:
+                    # Domain contains a brand but ISN'T the brand itself
+                    score += 35
+                    reasons.append(f"Contains brand keyword '{brand}'")
+                    break
+            
+            # --- Pattern 5: Suspicious Keyword Combos in Domain ---
+            # e.g., "secure-login.xyz", "verify-account.top"
+            danger_words = ['login', 'verify', 'secure', 'account', 'update', 'confirm',
+                          'password', 'banking', 'signin', 'auth', 'credential', 'unlock',
+                          'suspend', 'restore', 'recover', 'wallet', 'claim', 'prize',
+                          'winner', 'reward', 'urgent', 'alert', 'warning', 'helpdesk',
+                          'support', 'service', 'customer', 'resolution', 'validate']
+            danger_hits = sum(1 for w in danger_words if w in base_domain)
+            if danger_hits >= 2:
+                score += 40
+                reasons.append(f"Multiple danger keywords in domain ({danger_hits})")
+            elif danger_hits == 1:
+                score += 15
+                reasons.append("Danger keyword in domain")
+            
+            # --- Pattern 6: Long Domain Names ---
+            # Legitimate domains are usually short (google=6, amazon=6, facebook=8)
+            # Phishing domains tend to be much longer
+            if len(base_domain) > 25:
+                score += 20
+                reasons.append(f"Unusually long domain ({len(base_domain)} chars)")
+            elif len(base_domain) > 18:
+                score += 10
+            
+            # --- Pattern 7: Suspicious Path Patterns ---
+            # e.g., "/wp-admin/login.php", "/cgi-bin/", base64 in URL
+            if path:
+                if re.search(r'\.php|\.asp|\.cgi', path):
+                    score += 10
+                    reasons.append("Server-side script in path")
+                if re.search(r'[A-Za-z0-9+/]{30,}={0,2}', path):
+                    score += 15
+                    reasons.append("Possible base64-encoded data in URL")
+                if path.count('/') >= 6:
+                    score += 10
+                    reasons.append("Deep path nesting")
+                path_danger = sum(1 for w in ['login', 'verify', 'secure', 'account', 'password', 'signin', 'auth'] if w in path)
+                if path_danger >= 2:
+                    score += 15
+                    reasons.append("Multiple danger keywords in path")
+
+            # --- Pattern 8: Suspicious TLD + Any Other Signal ---
+            risky_tlds = ['.top', '.xyz', '.buzz', '.info', '.tk', '.ml', '.ga', '.cf', 
+                         '.gq', '.pw', '.cc', '.ws', '.bid', '.click', '.link', '.loan',
+                         '.online', '.site', '.work', '.life', '.icu', '.fun', '.monster',
+                         '.rest', '.cam', '.surf', '.bar', '.cyou']
+            has_risky_tld = any(domain.endswith(tld) for tld in risky_tlds)
+            if has_risky_tld:
+                score += 15
+                reasons.append("High-risk TLD")
+            
+            # --- Pattern 9: URL contains encoded characters ---
+            if '%' in full_url:
+                encoded_count = full_url.count('%')
+                if encoded_count >= 3:
+                    score += 15
+                    reasons.append(f"Multiple URL-encoded characters ({encoded_count})")
+            
+            # --- Determine Result ---
+            if score >= 70:
+                return True, min(score, 95), f"Suspicious Domain Patterns: {'; '.join(reasons[:3])}"
+            elif score >= 45:
+                return True, min(score, 80), f"Warning: {'; '.join(reasons[:2])}"
+            
+            return False, 0, ""
+            
+        except Exception as e:
+            logger.info(f"Domain Pattern Analysis Error: {e}")
+            return False, 0, ""
+
     def predict(self, url: str):
         url_lower = url.lower()
         reason = "Unknown"
@@ -423,6 +560,13 @@ class PhishingModel:
         except:
             pass
         
+        # 0.97 AI-Based Suspicious Domain Pattern Analysis
+        # This catches brand-new phishing domains that aren't in any database yet
+        is_suspicious, pattern_confidence, pattern_reason = self.analyze_domain_patterns(url)
+        if is_suspicious and pattern_confidence >= 70:
+            logger.info(f"Domain Pattern Alert: {url} — {pattern_reason}")
+            return 'phishing', pattern_confidence, pattern_reason
+        
         # 2. Localhost/IP specific check for demos
         is_local = 'localhost' in url_lower or '127.0.0.1' in url_lower
         if is_local:
@@ -474,5 +618,8 @@ class PhishingModel:
         if kw_count >= 2:
             return 'suspicious', 65, "Multiple Suspicious Keywords in URL"
 
-        return 'safe', 80, "No Threats Found"
+        # 5. Medium-confidence domain patterns (caught earlier but below phishing threshold)
+        if is_suspicious and pattern_confidence >= 45:
+            return 'suspicious', pattern_confidence, pattern_reason
 
+        return 'safe', 80, "No Threats Found"
