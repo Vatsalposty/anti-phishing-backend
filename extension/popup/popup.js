@@ -51,6 +51,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             chrome.storage.local.get({ totalScans: 0, blockedCount: 0 }, (items) => {
                 const scanCountEl = document.getElementById('scan-count');
                 if (scanCountEl) scanCountEl.textContent = items.totalScans;
+                const blockedCountEl = document.getElementById('blocked-count');
+                if (blockedCountEl) blockedCountEl.textContent = items.blockedCount;
             });
 
         } else {
