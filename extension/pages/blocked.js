@@ -20,17 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     btnGoBack.addEventListener('click', () => {
-        // Go back to the previous safe page
-        if (window.history.length > 1) {
-            window.history.back();
-            // Fallback if back doesn't actually navigate away (e.g. new tab history quirk)
-            setTimeout(() => {
-                window.location.replace('https://www.google.com');
-            }, 500);
-        } else {
-            // No history to go back to, close tab or redirect
-            window.location.replace('https://www.google.com');
-        }
+        // We cannot reliably use history.back() because it often takes the user 
+        // back to scanning.html, which re-blocks the page and creates an infinite loop.
+        // Returning to a known safe page is the best behavior.
+        window.location.replace('https://www.google.com');
     });
 
     btnProceed.addEventListener('click', () => {
