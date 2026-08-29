@@ -14,6 +14,7 @@ import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from firebase_db import db
+import html
 
 # Load environment variables
 load_dotenv()
@@ -220,8 +221,8 @@ def retrain_model(request: Request, background_tasks: BackgroundTasks):
 @limiter.limit("10/minute")
 def view_admin_reports(request: Request, key: str = Query(None)):
     """Simple Admin Dashboard to view Firebase reports."""
-    admin_secret = os.environ.get("ADMIN_SECRET", "admin123")
-    if key != admin_secret:
+    admin_secret = os.environ.get("ADMIN_SECRET")
+    if not admin_secret or key != admin_secret:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     if not db:
@@ -266,13 +267,18 @@ def view_admin_reports(request: Request, key: str = Query(None)):
         for doc in reports:
             data = doc.to_dict()
             time_str = data.get('last_reported', '').strftime("%Y-%m-%d %H:%M:%S") if hasattr(data.get('last_reported'), 'strftime') else str(data.get('last_reported', 'Unknown'))
+            safe_url = html.escape(str(data.get('url', 'Unknown')))
+            safe_reason = html.escape(str(data.get('reason', 'N/A')))
+            safe_status = html.escape(str(data.get('status', 'pending')))
+            safe_count = html.escape(str(data.get('report_count', 1)))
+            safe_time = html.escape(str(time_str))
             html_content += f"""
                         <tr>
-                            <td class="url">{data.get('url', 'Unknown')}</td>
-                            <td>{data.get('reason', 'N/A')}</td>
-                            <td><span class="badge bg-warning">{data.get('status', 'pending')}</span></td>
-                            <td>{data.get('report_count', 1)}</td>
-                            <td>{time_str}</td>
+                            <td class="url">{safe_url}</td>
+                            <td>{safe_reason}</td>
+                            <td><span class="badge bg-warning">{safe_status}</span></td>
+                            <td>{safe_count}</td>
+                            <td>{safe_time}</td>
                         </tr>
             """
             
@@ -286,7 +292,7 @@ def view_admin_reports(request: Request, key: str = Query(None)):
 
     except Exception as e:
         logger.error(f"Error fetching reports: {e}")
-        return HTMLResponse(f"<h1>Error</h1><p>Could not fetch reports from Firebase: {e}</p>")
+        return HTMLResponse(f"<h1>Error</h1><p>Could not fetch reports from Firebase.</p>")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

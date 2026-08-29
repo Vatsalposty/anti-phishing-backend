@@ -63,7 +63,7 @@ class PhishingModel:
                     pass
 
             try:
-                from train_xgboost import train_xgboost
+                from training_data.train_xgboost import train_xgboost
                 # Fallback retraining script doesn't have n_samples built into train_xgboost easily,
                 # but we will just call it anyway.
                 train_xgboost() 
