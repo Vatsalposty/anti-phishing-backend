@@ -40,7 +40,15 @@ def custom_rate_limit_exceeded_handler(request: Request, exc: Exception):
     return response
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="Anti-Phishing Backend API", lifespan=lifespan)
+is_prod = os.environ.get("PRODUCTION_MODE", "false").lower() == "true"
+
+app = FastAPI(
+    title="Anti-Phishing Backend API", 
+    lifespan=lifespan,
+    docs_url=None if is_prod else "/docs",
+    redoc_url=None if is_prod else "/redoc",
+    openapi_url=None if is_prod else "/openapi.json"
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, custom_rate_limit_exceeded_handler)
 
