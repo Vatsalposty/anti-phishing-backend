@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const reasonDisplay = document.getElementById('block-reason');
     const btnGoBack = document.getElementById('btn-go-back');
     const btnProceed = document.getElementById('btn-proceed');
+    const btnCopyDomain = document.getElementById('btn-copy-domain');
 
     if (targetUrl) {
         urlDisplay.innerText = targetUrl;
@@ -19,11 +20,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     btnGoBack.addEventListener('click', () => {
-        // Go back to the previous safe page, or close the tab
+        // Go back to the previous safe page
         if (window.history.length > 1) {
             window.history.back();
+            // Fallback if back doesn't actually navigate away (e.g. new tab history quirk)
+            setTimeout(() => {
+                window.location.replace('https://www.google.com');
+            }, 500);
         } else {
-            window.close();
+            // No history to go back to, close tab or redirect
+            window.location.replace('https://www.google.com');
         }
     });
 
@@ -40,4 +46,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    if (btnCopyDomain && targetUrl) {
+        btnCopyDomain.addEventListener('click', async () => {
+            try {
+                const hostname = new URL(targetUrl).hostname.replace('www.', '');
+                await navigator.clipboard.writeText(hostname);
+                
+                const originalText = btnCopyDomain.innerHTML;
+                btnCopyDomain.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
+                btnCopyDomain.style.color = '#10b981';
+                
+                setTimeout(() => {
+                    btnCopyDomain.innerHTML = originalText;
+                    btnCopyDomain.style.color = '#fff';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        });
+    }
 });

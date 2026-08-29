@@ -79,7 +79,14 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url) {
         if (!tab.url.startsWith('http')) {
-            updateBadge(tabId, 'safe');
+            if (tab.url.includes('pages/blocked.html')) {
+                updateBadge(tabId, 'phishing');
+            } else if (tab.url.includes('pages/scanning.html')) {
+                chrome.action.setBadgeText({ text: '...', tabId: tabId });
+                chrome.action.setBadgeBackgroundColor({ color: '#fcd34d', tabId: tabId });
+            } else {
+                updateBadge(tabId, 'safe');
+            }
             return;
         }
         
