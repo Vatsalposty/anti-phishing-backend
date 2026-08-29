@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Query, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +8,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from model import PhishingModel
-from firebase_db import log_attempt, log_system_event, log_user_report
+from firebase_db import log_attempt, log_system_event, log_user_report, sanitize_url
 import uvicorn
 import logging
 import os
@@ -51,6 +52,19 @@ app = FastAPI(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, custom_rate_limit_exceeded_handler)
+
+security = HTTPBasic()
+
+def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    admin_secret = os.environ.get("ADMIN_SECRET")
+    # For basic auth, we use the admin_secret as the password
+    if not admin_secret or credentials.password != admin_secret:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.password
 
 # CORS Configuration — Production Grade
 # If in production, we only allow specific origins (or no browser origins if only extension is used).
@@ -154,7 +168,7 @@ class UpdateStatusRequest(BaseModel):
 @app.post("/analyze", response_model=AnalyzeResponse)
 @limiter.limit("60/minute")
 def analyze_url(request: Request, body: AnalyzeRequest, background_tasks: BackgroundTasks):
-    logger.info(f"Analyzing URL: {body.url}")
+    logger.info(f"Analyzing URL: {sanitize_url(body.url)}")
     
     try:
         # Prediction
@@ -180,7 +194,7 @@ def analyze_url(request: Request, body: AnalyzeRequest, background_tasks: Backgr
 @app.post("/report")
 @limiter.limit("30/minute")
 def report_url(request: Request, body: ReportRequest, background_tasks: BackgroundTasks):
-    logger.info(f"User Report Received: {body.url}")
+    logger.info(f"User Report Received: {sanitize_url(body.url)}")
     try:
         background_tasks.add_task(log_user_report, body.url, body.reason)
         return {"status": "success", "message": "Report logged"}
@@ -253,11 +267,10 @@ def update_report_status(request: Request, body: UpdateStatusRequest):
 
 @app.get("/admin/reports", response_class=HTMLResponse)
 @limiter.limit("10/minute")
-def view_admin_reports(request: Request, key: str = Query(None)):
+def view_admin_reports(request: Request, admin_secret: str = Depends(verify_admin)):
     """Simple Admin Dashboard to view Firebase reports."""
-    admin_secret = os.environ.get("ADMIN_SECRET")
-    if not admin_secret or key != admin_secret:
-        raise HTTPException(status_code=403, detail="Unauthorized")
+    key = admin_secret # Pass this to the HTML template for the POST request
+
 
     if not db:
         return HTMLResponse("<h1>Firebase is not configured!</h1><p>Add FIREBASE_CREDENTIALS to your Render environment variables or put serviceAccountKey.json in the backend folder.</p>")

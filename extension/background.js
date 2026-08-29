@@ -11,6 +11,8 @@ const DEV_URL = "http://127.0.0.1:8000/analyze";
 let BACKEND_URL = DEV_URL; // Default to local for development
 
 const tabStatus = new Map(); // Store status per tabId
+const verifiedUrls = new Set(); // Store safely verified hostnames to prevent infinite loops
+const allowedUnsafeUrls = new Set(); // Store URLs user explicitly allowed
 
 // Initialize settings
 chrome.storage.sync.get({ devMode: false }, (items) => {
@@ -31,80 +33,115 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-// Listen for tab updates
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && tab.url) {
-        if (tab.url.startsWith('http')) {
-            chrome.storage.sync.get({ protectionEnabled: true, whitelist: [] }, (items) => {
-                if (items && items.protectionEnabled !== undefined) {
-                    if (!items.protectionEnabled) {
-                        chrome.action.setBadgeText({ text: "OFF", tabId });
-                        chrome.action.setBadgeBackgroundColor({ color: "#555", tabId });
-                        return;
-                    }
+// Intercept navigation before any data is sent
+chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
+    // Only intercept main frame navigations
+    if (details.frameId !== 0) return;
+    
+    const url = details.url;
+    
+    // Skip internal pages
+    if (!url.startsWith('http')) return;
+    
+    // Check if protection is enabled
+    const settings = await chrome.storage.sync.get({ protectionEnabled: true, whitelist: [] });
+    if (!settings.protectionEnabled) {
+        chrome.action.setBadgeText({ text: "OFF", tabId: details.tabId });
+        chrome.action.setBadgeBackgroundColor({ color: "#555", tabId: details.tabId });
+        return;
+    }
 
-                    try {
-                        const hostname = new URL(tab.url).hostname.replace('www.', '');
-                        if (items.whitelist && items.whitelist.includes(hostname)) {
-                            const result = { status: 'safe', confidence: 100 };
-                            tabStatus.set(tabId, result);
-                            updateBadge(tabId, 'safe');
-                            return;
-                        }
-                    } catch (e) { }
-
-                    analyzeUrl(tabId, tab.url);
-                }
-            });
-        } else {
-            // Mark internal pages (chrome://, about:, file://) as safe immediately
-            const result = { status: 'safe', confidence: 100 };
-            tabStatus.set(tabId, result);
-            updateBadge(tabId, 'safe');
+    try {
+        const parsedUrl = new URL(url);
+        const cacheKey = parsedUrl.origin + parsedUrl.pathname;
+        const hostname = parsedUrl.hostname;
+        
+        // Skip if user whitelisted
+        if (settings.whitelist && settings.whitelist.includes(hostname.replace('www.', ''))) {
+            return;
         }
+        
+        // Skip if already verified in this session
+        if (verifiedUrls.has(cacheKey) || allowedUnsafeUrls.has(cacheKey)) {
+            return;
+        }
+
+        // Intercept: Redirect to scanning page
+        const scanningUrl = chrome.runtime.getURL(`pages/scanning.html?url=${encodeURIComponent(url)}`);
+        chrome.tabs.update(details.tabId, { url: scanningUrl });
+        
+    } catch (e) {
+        log("Error in navigation interceptor:", e);
     }
 });
 
-// Listen for messages from popup
+// Update badge when a page finishes loading (if it was verified)
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete' && tab.url) {
+        if (!tab.url.startsWith('http')) {
+            updateBadge(tabId, 'safe');
+            return;
+        }
+        
+        try {
+            const parsedUrl = new URL(tab.url);
+            const cacheKey = parsedUrl.origin + parsedUrl.pathname;
+            if (verifiedUrls.has(cacheKey) || allowedUnsafeUrls.has(cacheKey)) {
+                updateBadge(tabId, 'safe'); // Or previous status
+            }
+        } catch(e) {}
+    }
+});
+
+// Listen for messages from popup and scanning pages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "get_status") {
         let status = tabStatus.get(request.tabId);
         if (!status) {
-            // If we don't have status (e.g. extension restarted), start analyzing now
             status = { status: "scanning", confidence: 0 };
             tabStatus.set(request.tabId, status);
-            analyzeUrl(request.tabId, request.url);
         }
         sendResponse(status);
+        return true;
+    }
+    
+    if (request.action === "scan_intercepted_url") {
+        const tabId = sender.tab ? sender.tab.id : null;
+        if (tabId) {
+            analyzeUrl(tabId, request.url).then(result => {
+                sendResponse(result);
+            }).catch(err => {
+                sendResponse({ status: "error" });
+            });
+            return true; // Indicates async response
+        }
+    }
+    
+    if (request.action === "allow_unsafe_url") {
+        try {
+            const parsedUrl = new URL(request.url);
+            const cacheKey = parsedUrl.origin + parsedUrl.pathname;
+            allowedUnsafeUrls.add(cacheKey);
+            sendResponse({ success: true });
+        } catch(e) {
+            sendResponse({ success: false });
+        }
+        return true;
     }
 });
 
 async function analyzeUrl(tabId, url) {
-    // Check if already scanning to prevent duplicate calls
-    const currentStatus = tabStatus.get(tabId);
-    if (currentStatus && currentStatus.status === 'scanning' && currentStatus.url === url) {
-        log("Already scanning this URL, skipping duplicate request.");
-        return;
-    }
-
     // Set initial loading state
     tabStatus.set(tabId, { status: 'scanning', confidence: 0, url: url });
     chrome.action.setBadgeText({ text: "...", tabId });
     chrome.action.setBadgeBackgroundColor({ color: "#888", tabId });
-
-    // Check if protection is enabled before proceeding
-    const settings = await chrome.storage.sync.get({ protectionEnabled: true });
-    if (!settings.protectionEnabled) {
-        log("Protection disabled, skipping analysis for:", url);
-        return;
-    }
 
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
         log("Skipping internal/non-http URL:", url);
         const safeResult = { status: "safe", confidence: 100 };
         tabStatus.set(tabId, safeResult);
         updateBadge(tabId, "safe");
-        return;
+        return safeResult;
     }
 
     try {
@@ -125,8 +162,6 @@ async function analyzeUrl(tabId, url) {
 
         // Store result
         tabStatus.set(tabId, result);
-
-        // Update Badge
         updateBadge(tabId, result.status);
 
         // --- v2.1: Track scan stats ---
@@ -139,45 +174,38 @@ async function analyzeUrl(tabId, url) {
             data: result
         }, () => chrome.runtime.lastError);
 
-        // Active Alert: Send message to Content Script
-        if (result.status === 'phishing') {
-            chrome.tabs.sendMessage(tabId, {
-                action: "SHOW_ALERT",
-                type: "phishing",
-                reason: result.reason
-            }, () => chrome.runtime.lastError);
-
+        if (result.status === 'safe') {
+            try {
+                const parsedUrl = new URL(url);
+                const cacheKey = parsedUrl.origin + parsedUrl.pathname;
+                verifiedUrls.add(cacheKey); // Cache as safe to prevent rescan loops
+                
+                // Clear cache after 15 minutes to re-verify if needed
+                setTimeout(() => {
+                    verifiedUrls.delete(cacheKey);
+                }, 15 * 60 * 1000);
+            } catch(e) {}
+        } else {
             // Increment blocked count
             chrome.storage.local.get({ blockedCount: 0 }, (items) => {
                 chrome.storage.local.set({ blockedCount: items.blockedCount + 1 });
             });
-
-            // --- v2.1: Chrome notification ---
-            showThreatNotification(url, result, 'phishing');
-
-        } else if (result.status === 'suspicious') {
-            chrome.tabs.sendMessage(tabId, {
-                action: "SHOW_ALERT",
-                type: "suspicious",
-                reason: result.reason
-            }, () => chrome.runtime.lastError);
-
-            // --- v2.1: Chrome notification for suspicious ---
-            showThreatNotification(url, result, 'suspicious');
+            showThreatNotification(url, result, result.status);
         }
 
+        return result;
 
     } catch (error) {
         log("Backend connection failed:", error);
-        // Fallback or offline mode could go here
         chrome.action.setBadgeText({ text: "ERR", tabId });
         chrome.action.setBadgeBackgroundColor({ color: "#000", tabId });
 
-        // Notify Popup of error
         chrome.runtime.sendMessage({
             action: "update_status",
             data: { status: "error", error: "Backend Disconnected" }
         }, () => chrome.runtime.lastError);
+        
+        return { status: "error" };
     }
 }
 

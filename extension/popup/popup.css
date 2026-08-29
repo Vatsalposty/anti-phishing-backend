@@ -124,26 +124,35 @@ header {
 .status-icon {
     display: inline-flex;
     padding: 12px;
-    /* Reduced from 18px */
     background: white;
     border-radius: 18px;
-    /* Slightly reduced */
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
     margin-bottom: 12px;
-    /* Reduced from 16px */
     color: #238636;
     transition: all 0.3s ease;
 }
 
-/* ... existing status-icon phishing styles ... */
+.status-card.phishing .status-icon {
+    color: var(--danger-color);
+    box-shadow: 0 12px 24px rgba(245, 87, 108, 0.2);
+}
+
+.status-card.error .status-icon {
+    color: #555;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+.status-card.phishing .scan-animation,
+.status-card.error .scan-animation,
+.status-card.safe .scan-animation {
+    display: none;
+}
 
 .status-card h2 {
     font-size: 1.35rem;
-    /* Slightly reduced font size */
     font-weight: 800;
     letter-spacing: -0.02em;
     margin-bottom: 6px;
-    /* Reduced from 8px */
 }
 
 /* Scanner Animation */

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Guard - Threat Blocked</title>
+    <link rel="stylesheet" href="blocked.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="block-container">
+        <div class="warning-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        </div>
+
+        <div class="block-content">
+            <h1>Phishing Threat Blocked</h1>
+            <p class="description">Our AI analysis detected severe security risks on this website. For your safety, we have completely blocked your connection to prevent data theft.</p>
+            
+            <div class="url-box">
+                <span class="label">Blocked URL:</span>
+                <span class="url" id="blocked-url"></span>
+            </div>
+
+            <div class="reason-box">
+                <span class="label">AI Diagnosis:</span>
+                <span class="reason" id="block-reason">High probability of phishing or malicious activity.</span>
+            </div>
+
+            <div class="whitelist-hint">
+                <p>If you are sure this website is secure, copy the domain and add it to <strong>Trusted Domains (Allowlist)</strong> in <a href="settings.html" target="_blank" style="color: #6e8efb; text-decoration: underline;">Settings</a>.</p>
+            </div>
+
+            <div class="actions">
+                <button class="btn-primary" id="btn-go-back">Return to Safety</button>
+                <button class="btn-secondary" id="btn-proceed">Proceed Anyway (Unsafe)</button>
+            </div>
+        </div>
+    </div>
+    <script src="blocked.js"></script>
+</body>
+</html>

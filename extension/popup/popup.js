@@ -8,7 +8,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const urlObj = new URL(tab.url);
                 hostname = urlObj.hostname;
-                if (!hostname) {
+                
+                // If popup opened on a blocked/scanning page, show the actual URL being analyzed
+                if (tab.url.startsWith('chrome-extension:') && (tab.url.includes('scanning.html') || tab.url.includes('blocked.html'))) {
+                    const originalUrl = urlObj.searchParams.get('url');
+                    if (originalUrl) {
+                        try {
+                            hostname = new URL(originalUrl).hostname;
+                        } catch(e) {}
+                    }
+                } else if (!hostname) {
                     if (tab.url.startsWith('file:')) hostname = 'Local File';
                     else if (tab.url.startsWith('chrome:')) hostname = 'Chrome Page';
                     else if (tab.url.startsWith('chrome-extension:')) hostname = 'Extension Page';

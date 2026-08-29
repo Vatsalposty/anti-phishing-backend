@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Guard - Scanning Site</title>
+    <link rel="stylesheet" href="scanning.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="scan-container">
+        <div class="brand">
+            <img src="../icons/icon48.png" alt="AI Guard Logo">
+            <h1>Anti-Phishing AI Guard</h1>
+        </div>
+        
+        <div class="scanner-ui">
+            <div class="pulse-ring"></div>
+            <div class="shield-icon">🛡️</div>
+        </div>
+
+        <div class="status-text">
+            <h2 id="status-title">Zero-Leak Protection Active</h2>
+            <p id="status-desc">Intercepted connection. Our AI is analyzing the destination for phishing threats before allowing your IP to connect...</p>
+        </div>
+
+        <div class="target-url" id="target-url-display">
+            <!-- URL will be injected here -->
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+    </div>
+    <script src="scanning.js"></script>
+</body>
+</html>

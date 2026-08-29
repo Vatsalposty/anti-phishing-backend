@@ -4,6 +4,7 @@ import datetime
 import hashlib
 import logging
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 import firebase_admin
 from firebase_admin import credentials, firestore
 
@@ -45,24 +46,35 @@ try:
 except Exception as e:
     logger.error(f"Error initializing Firebase: {e}")
 
+def sanitize_url(url: str) -> str:
+    """Removes query parameters and fragments from URL to prevent PII leakage."""
+    try:
+        parsed = urlparse(url)
+        # Reconstruct URL without query and fragment
+        sanitized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        return sanitized.rstrip('/')
+    except Exception:
+        return url
+
 def log_attempt(url, status, confidence):
+    sanitized_url = sanitize_url(url)
     if not db:
-        logger.info(f"[MOCK-FIREBASE] Logged: {url} | {status} | {confidence}%")
+        logger.info(f"[MOCK-FIREBASE] Logged: {sanitized_url} | {status} | {confidence}%")
         return
 
     try:
         # Use URL hash as distinct ID to avoid duplicates
-        doc_id = hashlib.sha256(url.encode('utf-8')).hexdigest()[:32]
+        doc_id = hashlib.sha256(sanitized_url.encode('utf-8')).hexdigest()[:32]
         doc_ref = db.collection('phishing_attempts').document(doc_id)
         
         doc_ref.set({
-            'url': url,
+            'url': sanitized_url,
             'status': status,
             'confidence': confidence,
             'last_seen': datetime.datetime.now(),
             'count': firestore.Increment(1)
         }, merge=True)
-        logger.info(f"Logged/Updated Firebase: {url}")
+        logger.info(f"Logged/Updated Firebase: {sanitized_url}")
     except Exception as e:
         logger.error(f"Error writing to Firestore: {e}")
 
@@ -83,22 +95,23 @@ def log_system_event(event_type, details):
         logger.error(f"Error writing System Event to Firestore: {e}")
 
 def log_user_report(url, reason="user_report"):
+    sanitized_url = sanitize_url(url)
     if not db:
-        logger.info(f"[MOCK-FIREBASE] User Report: {url} | {reason}")
+        logger.info(f"[MOCK-FIREBASE] User Report: {sanitized_url} | {reason}")
         return
 
     try:
         # Use URL hash to separate unique reports
-        doc_id = hashlib.sha256(url.encode('utf-8')).hexdigest()[:32]
+        doc_id = hashlib.sha256(sanitized_url.encode('utf-8')).hexdigest()[:32]
         doc_ref = db.collection('user_reports').document(doc_id)
         
         doc_ref.set({
-            'url': url,
+            'url': sanitized_url,
             'reason': reason,
             'last_reported': datetime.datetime.now(),
             'status': 'pending_review',
             'report_count': firestore.Increment(1)
         }, merge=True)
-        logger.info(f"Logged/Updated User Report: {url}")
+        logger.info(f"Logged/Updated User Report: {sanitized_url}")
     except Exception as e:
         logger.error(f"Error writing User Report to Firestore: {e}")
