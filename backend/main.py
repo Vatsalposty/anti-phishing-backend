@@ -142,6 +142,11 @@ class ReportRequest(BaseModel):
             raise ValueError('Reason exceeds maximum length of 500 characters')
         return v
 
+class UpdateStatusRequest(BaseModel):
+    key: str
+    doc_id: str
+    status: str
+
 # --- Endpoints ---
 
 
@@ -225,6 +230,27 @@ def retrain_model(request: Request, background_tasks: BackgroundTasks):
     background_tasks.add_task(background_retrain)
     return {"status": "success", "message": "Model retraining started in the background"}
 
+@app.post("/admin/update-status")
+@limiter.limit("30/minute")
+def update_report_status(request: Request, body: UpdateStatusRequest):
+    admin_secret = os.environ.get("ADMIN_SECRET")
+    if not admin_secret or body.key != admin_secret:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    if body.status not in ["phishing", "safe", "pending_review"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+        
+    if not db:
+        raise HTTPException(status_code=500, detail="Firebase not configured")
+        
+    try:
+        doc_ref = db.collection('user_reports').document(body.doc_id)
+        doc_ref.update({'status': body.status})
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Error updating report status: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update status")
+
 @app.get("/admin/reports", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 def view_admin_reports(request: Request, key: str = Query(None)):
@@ -254,7 +280,30 @@ def view_admin_reports(request: Request, key: str = Query(None)):
                     .url { color: #58a6ff; font-weight: bold; }
                     .badge { padding: 4px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
                     .bg-warning { background: rgba(210, 153, 34, 0.2); color: #d29922; }
+                    .bg-danger { background: rgba(248, 81, 73, 0.2); color: #ff7b72; }
+                    .bg-success { background: rgba(46, 160, 67, 0.2); color: #3fb950; }
+                    button { border: none; padding: 6px 12px; margin-right: 5px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; }
+                    .btn-phishing { background: #da3633; color: white; }
+                    .btn-safe { background: #238636; color: white; }
                 </style>
+                <script>
+                    async function updateStatus(docId, status, key) {
+                        try {
+                            const response = await fetch('/admin/update-status', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ key: key, doc_id: docId, status: status })
+                            });
+                            if (response.ok) {
+                                window.location.reload();
+                            } else {
+                                alert('Failed to update status');
+                            }
+                        } catch (e) {
+                            alert('Error: ' + e);
+                        }
+                    }
+                </script>
             </head>
             <body>
                 <h1>🛡️ User Reports Dashboard</h1>
@@ -267,6 +316,7 @@ def view_admin_reports(request: Request, key: str = Query(None)):
                             <th>Status</th>
                             <th>Count</th>
                             <th>Last Reported</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -274,19 +324,30 @@ def view_admin_reports(request: Request, key: str = Query(None)):
         
         for doc in reports:
             data = doc.to_dict()
+            doc_id = doc.id
             time_str = data.get('last_reported', '').strftime("%Y-%m-%d %H:%M:%S") if hasattr(data.get('last_reported'), 'strftime') else str(data.get('last_reported', 'Unknown'))
             safe_url = html.escape(str(data.get('url', 'Unknown')))
             safe_reason = html.escape(str(data.get('reason', 'N/A')))
-            safe_status = html.escape(str(data.get('status', 'pending')))
+            
+            raw_status = data.get('status', 'pending')
+            safe_status = html.escape(str(raw_status))
+            badge_class = "bg-warning"
+            if raw_status == "phishing": badge_class = "bg-danger"
+            elif raw_status == "safe": badge_class = "bg-success"
+            
             safe_count = html.escape(str(data.get('report_count', 1)))
             safe_time = html.escape(str(time_str))
             html_content += f"""
                         <tr>
                             <td class="url">{safe_url}</td>
                             <td>{safe_reason}</td>
-                            <td><span class="badge bg-warning">{safe_status}</span></td>
+                            <td><span class="badge {badge_class}">{safe_status}</span></td>
                             <td>{safe_count}</td>
                             <td>{safe_time}</td>
+                            <td>
+                                <button class="btn-phishing" onclick="updateStatus('{doc_id}', 'phishing', '{key}')">Mark Phishing</button>
+                                <button class="btn-safe" onclick="updateStatus('{doc_id}', 'safe', '{key}')">Mark Safe</button>
+                            </td>
                         </tr>
             """
             
