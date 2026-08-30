@@ -28,7 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (response && response.status) {
-            handleScanResult(response.status, response.reason, targetUrl);
+            if (response.status === 'error') {
+                handleError();
+            } else {
+                handleScanResult(response.status, response.reason, targetUrl);
+            }
         } else {
             handleError();
         }
