@@ -17,12 +17,15 @@ from bs4 import BeautifulSoup
 from collections import Counter
 from urllib.parse import urlparse
 import xgboost as xgb
+import reputation
 
 class PhishingModel:
     def __init__(self):
         self.model = None
         current_dir = os.path.dirname(os.path.abspath(__file__))
         model_path = os.path.join(current_dir, 'xgboost_model.json')
+        
+        # Reputation removed: Do not use unbounded runtime downloads.
         
         # Load Safe Domains Dataset
         self.safe_domains = set()
@@ -43,6 +46,7 @@ class PhishingModel:
         try:
             if os.path.exists(model_path):
                 self.model = xgb.XGBClassifier()
+                self.model._estimator_type = "classifier"
                 self.model.load_model(model_path)
                 logger.info("Model loaded successfully.")
             else:
@@ -51,33 +55,19 @@ class PhishingModel:
             logger.info(f"Error loading model: {repr(e)}")
             traceback.print_exc()
             
-            # --- Self-Healing: Attempt to Retrain on Server ---
-            logger.info("Attempting to Retrain Model on Server (Self-Healing)...")
-            
-            # Delete the corrupted file if it exists to prevent repeat errors
-            if os.path.exists(model_path):
-                try:
-                    os.remove(model_path)
-                    logger.info("Deleted corrupted model file.")
-                except OSError:
-                    pass
-
-            try:
-                from training_data.train_xgboost import train_xgboost
-                # Fallback retraining script doesn't have n_samples built into train_xgboost easily,
-                # but we will just call it anyway.
-                train_xgboost() 
-                
-                if os.path.exists(model_path):
-                     logger.info(f"Model Retrained. Size: {os.path.getsize(model_path)} bytes. Reloading...")
-                     self.model = xgb.XGBClassifier()
-                     self.model.load_model(model_path)
-                     logger.info("Model Reloaded Successfully!")
-                else:
-                    logger.info("Retraining finished but model file not found.")
-            except Exception as re_e:
-                logger.info(f"Retraining Failed: {re_e}")
-                traceback.print_exc()
+        # Load Candidate Model (Shadow Mode)
+        candidate_model_path = os.path.join(current_dir, 'xgboost_candidate.json')
+        self.candidate_model = None
+        self.enable_shadow = False  # Disabled by default until bounded execution is implemented
+        try:
+            if os.path.exists(candidate_model_path):
+                self.candidate_model = xgb.XGBClassifier()
+                self.candidate_model._estimator_type = "classifier"
+                self.candidate_model.load_model(candidate_model_path)
+                logger.info("Candidate model loaded successfully for shadow mode.")
+        except Exception as e:
+            self.candidate_model = None
+            logger.warning(f"Error loading candidate model: {e}")
 
     def calculate_entropy(self, text):
         if not text:
@@ -115,6 +105,38 @@ class PhishingModel:
         suspicious_tlds = ['.top', '.xyz', '.buzz', '.info', '.tk', '.ml', '.ga', '.cf', '.gq']
         has_susp_tld = 1 if any(domain.endswith(tld) for tld in suspicious_tlds) else 0
         features.append(has_susp_tld)
+        
+        return features
+
+    def extract_features_v2(self, url):
+        features = []
+        parsed = urlparse(url)
+        hostname = parsed.netloc or ''
+        path = parsed.path or ''
+        query = parsed.query or ''
+        
+        # Baseline 9 features
+        features.append(len(url))
+        features.append(url.count('.'))
+        features.append(url.count('-'))
+        features.append(url.count('@'))
+        features.append(url.count('//'))
+        ip_pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+        features.append(1 if re.search(ip_pattern, url) else 0)
+        features.append(1 if 'https' not in url.lower() else 0)
+        features.append(self.calculate_entropy(hostname))
+        suspicious_tlds = ['.top', '.xyz', '.buzz', '.info', '.tk', '.ml', '.ga', '.cf', '.gq']
+        features.append(1 if any(hostname.lower().endswith(tld) for tld in suspicious_tlds) else 0)
+        
+        # Additional 7 features (Total 16)
+        features.append(len(hostname))
+        features.append(hostname.count('.'))
+        features.append(hostname.count('-'))
+        features.append(len(path))
+        features.append(path.count('/'))
+        features.append(len(query))
+        suspicious_keywords = ['login', 'signin', 'verify', 'update', 'secure', 'account', 'banking', 'confirm', 'password']
+        features.append(1 if any(kw in url.lower() for kw in suspicious_keywords) else 0)
         
         return features
 
@@ -257,7 +279,7 @@ class PhishingModel:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('results', {}).get('in_database'):
-                    if result['results']['verified']:
+                    if result['results'].get('verified') and result['results'].get('valid'):
                         logger.info(f"PhishTank ALERT: {url} is a VERIFIED phishing site.")
                         return 'phishing'
             return None
@@ -409,7 +431,7 @@ class PhishingModel:
         # 0. Allowlist (Hardware bypass for speed and safety)
         from urllib.parse import urlparse
         try:
-            domain = urlparse(url).netloc
+            domain = urlparse(url_lower).netloc
             if domain.startswith('www.'): domain = domain[4:]
             
             if domain in self.safe_domains:
@@ -600,15 +622,47 @@ class PhishingModel:
             try:
                 features = np.array([self.extract_features(url)])
                 prediction = self.model.predict(features)[0]
-                if prediction == 1:
-                    try:
-                        probs = self.model.predict_proba(features)[0]
-                        confidence = int(probs[1] * 100)
-                    except:
-                        confidence = 90
+                
+                # Retrieve probability for Class 1 (Phishing)
+                try:
+                    dmatrix = xgb.DMatrix(features)
+                    phish_prob = self.model.get_booster().predict(dmatrix)[0]
+                except Exception as e:
+                    logger.warning(f"Failed to get probability: {e}")
+                    phish_prob = 0.9 if prediction == 1 else 0.1
+                
+                # --- SHADOW MODE EVALUATION ---
+                if hasattr(self, 'candidate_model') and self.candidate_model and getattr(self, 'enable_shadow', False):
+                    def shadow_task(u, base_p):
+                        try:
+                            import time
+                            start_t = time.time()
+                            features_v2 = np.array([self.extract_features_v2(u)])
+                            cand_dmatrix = xgb.DMatrix(features_v2)
+                            cand_prob = float(self.candidate_model.get_booster().predict(cand_dmatrix)[0])
+                            latency = (time.time() - start_t) * 1000
+                            # Privacy safe logging: aggregate metrics only, no domain identifiers
+                            logger.info(f"[SHADOW MODE] Base Prob: {base_p:.4f} | Cand Prob: {cand_prob:.4f} | Latency: {latency:.2f}ms")
+                        except Exception as cand_e:
+                            logger.warning(f"[SHADOW MODE] Error: {cand_e}")
+                    
+                    # Note: Disabled by default to avoid unbounded thread creation.
+                    import threading
+                    threading.Thread(target=shadow_task, args=(url, phish_prob), daemon=True).start()
+                # ------------------------------
+                
+                confidence = int(phish_prob * 100)
+                
+                # Fixed Threshold Calibration (Reputation logic removed)
+                threshold = 0.75
+                
+                if phish_prob >= threshold:
                     return 'phishing', confidence, "AI Model Detection Pattern"
+                elif phish_prob >= 0.70:
+                    return 'suspicious', confidence, "Suspicious URL Pattern (AI Model)"
                 else:
-                     return 'safe', 95, "Safe (AI Verification)"
+                    return 'safe', max(95 - confidence, 50), "Safe (AI Verification)"
+                    
             except Exception as e:
                 logger.info(f"Prediction Error: {e}")
 
