@@ -207,6 +207,7 @@ header h1 {
 .badge-safe { background: #3fb95020; }
 .badge-phishing { background: #f8514920; }
 .badge-suspicious { background: #d2992220; }
+.badge-unverified { background: #8b949e20; }
 
 .item-info {
     flex: 1;
@@ -244,6 +245,7 @@ header h1 {
 .confidence-safe { color: #3fb950; }
 .confidence-phishing { color: #f85149; }
 .confidence-suspicious { color: #d29922; }
+.confidence-unverified { color: #8b949e; }
 
 .item-time {
     font-size: 0.72rem;

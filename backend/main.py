@@ -12,6 +12,7 @@ from firebase_db import log_attempt, log_system_event, log_user_report, sanitize
 import uvicorn
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from firebase_db import db
@@ -58,7 +59,7 @@ security = HTTPBasic()
 def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
     admin_secret = os.environ.get("ADMIN_SECRET")
     # For basic auth, we use the admin_secret as the password
-    if not admin_secret or credentials.password != admin_secret:
+    if not admin_secret or not secrets.compare_digest(credentials.password, admin_secret):
         raise HTTPException(
             status_code=401,
             detail="Incorrect username or password",
@@ -157,7 +158,6 @@ class ReportRequest(BaseModel):
         return v
 
 class UpdateStatusRequest(BaseModel):
-    key: str
     doc_id: str
     status: str
 
@@ -206,10 +206,13 @@ def report_url(request: Request, body: ReportRequest, background_tasks: Backgrou
 @limiter.limit("30/minute")
 def get_stats(request: Request):
     return {
-        "total_scans": 1245,
-        "threats_blocked": 87,
+        # These counters are not currently collected. Return null instead of
+        # presenting hard-coded demo values as live production analytics.
+        "total_scans": None,
+        "threats_blocked": None,
+        "stats_available": False,
         "system_status": "healthy",
-        "model_version": "2.1.0"
+        "model_version": "legacy-xgboost"
     }
 
 # --- Auto-Retrain Endpoint (Protected by Secret Key) ---
@@ -246,11 +249,7 @@ def retrain_model(request: Request, background_tasks: BackgroundTasks):
 
 @app.post("/admin/update-status")
 @limiter.limit("30/minute")
-def update_report_status(request: Request, body: UpdateStatusRequest):
-    admin_secret = os.environ.get("ADMIN_SECRET")
-    if not admin_secret or body.key != admin_secret:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    
+def update_report_status(request: Request, body: UpdateStatusRequest, admin_secret: str = Depends(verify_admin)):
     if body.status not in ["phishing", "safe", "pending_review"]:
         raise HTTPException(status_code=400, detail="Invalid status")
         
@@ -269,9 +268,6 @@ def update_report_status(request: Request, body: UpdateStatusRequest):
 @limiter.limit("10/minute")
 def view_admin_reports(request: Request, admin_secret: str = Depends(verify_admin)):
     """Simple Admin Dashboard to view Firebase reports."""
-    key = admin_secret # Pass this to the HTML template for the POST request
-
-
     if not db:
         return HTMLResponse("<h1>Firebase is not configured!</h1><p>Add FIREBASE_CREDENTIALS to your Render environment variables or put serviceAccountKey.json in the backend folder.</p>")
 
@@ -300,12 +296,13 @@ def view_admin_reports(request: Request, admin_secret: str = Depends(verify_admi
                     .btn-safe { background: #238636; color: white; }
                 </style>
                 <script>
-                    async function updateStatus(docId, status, key) {
+                    async function updateStatus(docId, status) {
                         try {
                             const response = await fetch('/admin/update-status', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ key: key, doc_id: docId, status: status })
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ doc_id: docId, status: status })
                             });
                             if (response.ok) {
                                 window.location.reload();
@@ -316,6 +313,11 @@ def view_admin_reports(request: Request, admin_secret: str = Depends(verify_admi
                             alert('Error: ' + e);
                         }
                     }
+                    document.addEventListener('click', (event) => {
+                        const button = event.target.closest('button[data-doc-id]');
+                        if (!button) return;
+                        updateStatus(button.dataset.docId, button.dataset.status);
+                    });
                 </script>
             </head>
             <body>
@@ -337,7 +339,7 @@ def view_admin_reports(request: Request, admin_secret: str = Depends(verify_admi
         
         for doc in reports:
             data = doc.to_dict()
-            doc_id = doc.id
+            safe_doc_id = html.escape(str(doc.id), quote=True)
             time_str = data.get('last_reported', '').strftime("%Y-%m-%d %H:%M:%S") if hasattr(data.get('last_reported'), 'strftime') else str(data.get('last_reported', 'Unknown'))
             safe_url = html.escape(str(data.get('url', 'Unknown')))
             safe_reason = html.escape(str(data.get('reason', 'N/A')))
@@ -358,8 +360,8 @@ def view_admin_reports(request: Request, admin_secret: str = Depends(verify_admi
                             <td>{safe_count}</td>
                             <td>{safe_time}</td>
                             <td>
-                                <button class="btn-phishing" onclick="updateStatus('{doc_id}', 'phishing', '{key}')">Mark Phishing</button>
-                                <button class="btn-safe" onclick="updateStatus('{doc_id}', 'safe', '{key}')">Mark Safe</button>
+                                <button class="btn-phishing" data-doc-id="{safe_doc_id}" data-status="phishing">Mark Phishing</button>
+                                <button class="btn-safe" data-doc-id="{safe_doc_id}" data-status="safe">Mark Safe</button>
                             </td>
                         </tr>
             """

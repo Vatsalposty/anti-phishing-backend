@@ -1,55 +1,45 @@
-# Chrome Web Store Metadata
-This file contains everything you need to copy/paste into the Chrome Developer Dashboard when publishing the **Anti-Phishing AI Guard v2.1.0**.
+# Chrome Web Store Draft — Anti-Phishing AI Guard v2.2.0
 
-## 1. Store Listing (English)
+Use this as a factual draft only. Confirm the final data disclosures, store policy answers, listing assets, and privacy policy URL before submission.
+
+## Store listing
 
 **Name:** Anti-Phishing AI Guard
-**Short Name:** Anti-Phishing Guard
-**Summary:** (Max 132 chars)
-Real-time AI-powered protection that automatically detects and blocks phishing sites, scams, and malicious URLs before they load.
+**Short name:** Anti-Phishing Guard
+**Summary:** Checks web addresses before navigation and warns when a site is suspicious or could not be verified.
 
-**Detailed Description:**
-Anti-Phishing AI Guard is your premium defense against the ever-evolving landscape of online scams, phishing attempts, and malicious websites. Traditional antiviruses rely on outdated blacklists. Our guard uses a cutting-edge 12-layer AI detection pipeline to proactively analyze websites in real-time, catching threats before they are even reported to the public.
+**Description:**
 
-**Key Features:**
-🛡️ **Real-Time AI Scanning:** Analyzes URLs using advanced machine learning, heuristics, and homoglyph detection (e.g., detecting fake domains like `lnstagram.com`).
-⚡ **Zero-Day Protection:** Our AI backend (XGBoost) actively evaluates page characteristics, ensuring protection even against newly created scam sites.
-📊 **Scan History & Trust Scores:** Keep track of every site you visit with detailed trust percentages and a beautiful, transparent history dashboard.
-🔔 **Instant Notifications:** Get immediate system alerts the moment a malicious page is detected, automatically blocking access to protect your data.
-🕵️ **Privacy First:** We only scan URLs for security. We do not track your browsing history or sell your data.
-🚨 **Report Suspicious Sites:** Help the community by instantly reporting dangerous sites to our global database with one click.
+Anti-Phishing AI Guard checks HTTP and HTTPS destinations using a remote analysis service. The service combines URL rules, a legacy machine-learning model, a PhishTank lookup, and a limited server-side page fetch. The extension shows separate outcomes for phishing, suspicious, safe-with-no-detection, and unable-to-verify results.
 
-Browse with absolute confidence, knowing our AI is analyzing every link to keep your passwords, identity, and finances secure.
+An unable-to-verify result means the scan did not complete. It is not a phishing verdict and does not establish that a site is safe. Users can return to safety or choose to continue without a completed scan.
 
----
+The extension stores recent scan history locally and offers an optional user-report action. Detection is imperfect; use normal care with links and credentials.
 
-## 2. Privacy practices
+## Privacy and data flow
 
-**Single purpose description:**
-The single purpose of this extension is to protect users from phishing and malicious websites by analyzing the URLs they visit in real-time using an AI-powered detection backend.
+**Single purpose:** Check the URLs users visit for phishing indicators and show an appropriate warning or scan status.
 
-**Permissions Justification:**
-The extension requests the following permissions, all of which are strictly necessary for the core security function:
+**Data processed:** The full URL is sent from the extension to the configured backend. URLs can contain sensitive information in their paths or query strings; users should avoid navigating to URLs containing private tokens while scanning is enabled.
 
-*   **`tabs`**: Required to read the URL of the currently active tab so it can be securely sent to our backend AI model for threat analysis.
-*   **`storage`**: Required to save the user's scan history, total blocked counts, and application settings locally on their device.
-*   **`notifications`**: Required to instantly alert the user with a system notification when a critical phishing threat is detected and blocked.
-*   **`activeTab`**: Used to safely interact with the current page when the user clicks the extension popup, without requiring broad access until requested.
-*   **Host Permissions (`http://*/*`, `https://*/*`)**: Strictly necessary to inject the blocking script (content.js) into any website the user visits. Without this, the extension cannot physically intercept and block a phishing page before it steals user data.
+**Third-party processing:** The backend submits the URL to PhishTank for lookup and makes a limited HTTP(S) request to the destination to inspect selected page features. It does not use the user's browser cookies or execute the destination's JavaScript.
 
-**Data Usage:**
-*   **Does this extension collect or use your data?** Yes.
-*   **What data?** Website content (URLs visited).
-*   **Why?** The URLs are sent securely to our API for real-time AI analysis. The URLs are not tied to user identities and are not stored permanently unless explicitly reported by the user as malicious.
-*   **Do you sell this data?** No.
-*   **Do you use it for unrelated purposes?** No.
+**Storage and retention:** The extension stores the most recent scan history, including full URLs, locally in browser storage; users can clear scan history in the extension. When Firebase is configured, phishing/suspicious detections and user-submitted reports are stored server-side. The stored URL omits query strings and fragments, but retains the path; detection records also retain status, confidence, timestamps, and counts. The application does not currently implement an automatic retention period for those Firebase records.
 
----
+**Sharing and sale:** The project does not sell URL data. URL data is shared with the configured backend, PhishTank, and the destination host as described above. Firebase and the backend hosting provider process data for service operation.
 
-## 3. Preparation Checklist
-Before clicking Submit for Review, ensure you have:
-- [ ] A 128x128 pixel icon file.
-- [ ] A 1280x800 Promotional Marquee image.
-- [ ] At least 1-2 screenshots of the popup and history page in action.
-- [ ] A published URL for the Privacy Policy (Use the `PRIVACY_POLICY.md` file provided).
-- [ ] Zipped the extension folder (do NOT include the `backend/` folder or `.git/` folder in the ZIP).
+## Permission notes to verify
+
+- `webNavigation`, `tabs`, and HTTP/HTTPS host permissions support intercepting and analyzing navigations.
+- `storage` keeps local preferences and recent scan history.
+- `notifications` displays threat notifications.
+- `activeTab` is declared in the manifest; verify that the shipped code needs it and remove it if it is unused.
+
+## Before submission
+
+- Publish a privacy policy matching the data flow and retention statements above.
+- Verify every Chrome Web Store privacy-practices answer against the shipped code and production backend configuration.
+- Confirm backend availability, production configuration, and model limitations.
+- Prepare store screenshots and promotional assets required by the dashboard.
+- Package only the contents of `extension/`; do not include the backend, datasets, credentials, `.git`, or development/test files.
+- Test the ZIP by loading it as an unpacked extension before upload.

@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Anti-Phishing AI Guard",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "minimum_chrome_version": "110",
     "offline_enabled": false,
     "icons": {
@@ -9,9 +9,8 @@
         "48": "icons/icon48.png",
         "128": "icons/icon128.png"
     },
-    "description": "Premium AI-powered protection against phishing attacks.",
+    "description": "Checks web addresses and warns when a site is suspicious or could not be verified.",
     "permissions": [
-        "activeTab",
         "tabs",
         "storage",
         "notifications",

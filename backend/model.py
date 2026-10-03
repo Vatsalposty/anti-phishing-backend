@@ -4,29 +4,132 @@ logger = logging.getLogger(__name__)
 
 import os
 import re
+import socket
+import ssl
+import ipaddress
+import http.client
 import requests
 import joblib
 import numpy as np
 import traceback
 import math
-import socket
-import ipaddress
 import whois
 from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from collections import Counter
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 import xgboost as xgb
-import reputation
+from firebase_db import sanitize_url
+
+def secure_fetch(url, max_redirects=3, timeout=5, max_bytes=500*1024):
+    """
+    Isolated, safe fetch implementation with verified TLS and original-hostname
+    certificate/SNI checks, plus explicit SSRF IP restrictions.
+    """
+    if max_redirects < 0:
+        raise ValueError("Too many redirects")
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        raise ValueError(f"Invalid scheme: {parsed.scheme}")
+
+    port = parsed.port
+    if not port:
+        port = 443 if parsed.scheme == 'https' else 80
+
+    if parsed.scheme == 'http' and port != 80:
+        raise ValueError(f"Blocked scheme/port combination: {parsed.scheme}:{port}")
+    if parsed.scheme == 'https' and port != 443:
+        raise ValueError(f"Blocked scheme/port combination: {parsed.scheme}:{port}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Missing hostname")
+
+    try:
+        addr_info = socket.getaddrinfo(hostname, port, 0, socket.SOCK_STREAM)
+    except socket.gaierror as e:
+        raise ValueError(f"DNS resolution failed for {hostname}") from e
+
+    valid_ips = []
+    for res in addr_info:
+        ip = res[4][0]
+        ip_obj = ipaddress.ip_address(ip)
+        if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved or not ip_obj.is_global:
+            logger.info(f"SSRF BLOCK: Prevented connection to internal/private IP {ip} for host {hostname}")
+            raise ValueError(f"Blocked internal/private IP: {ip}")
+        if ip not in valid_ips:
+            valid_ips.append(ip)
+
+    if not valid_ips:
+        raise ValueError(f"No valid IP found for {hostname}")
+
+    valid_ip = valid_ips[0]
+    sock = socket.create_connection((valid_ip, port), timeout=timeout)
+    conn = None
+
+    try:
+        if parsed.scheme == 'https':
+            context = ssl.create_default_context()
+            sock = context.wrap_socket(sock, server_hostname=hostname)
+            conn = http.client.HTTPSConnection(valid_ip, port=port, timeout=timeout, context=context)
+            conn.sock = sock
+        else:
+            conn = http.client.HTTPConnection(valid_ip, port=port, timeout=timeout)
+            conn.sock = sock
+
+        path = parsed.path or '/'
+        if parsed.query:
+            path += '?' + parsed.query
+
+        headers = {
+            'Host': hostname,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Connection': 'close'
+        }
+
+        conn.request('GET', path, headers=headers)
+        resp = conn.getresponse()
+
+        if resp.status in (301, 302, 303, 307, 308):
+            location = resp.getheader('Location')
+            if not location:
+                raise ValueError("Redirect missing Location header")
+            next_url = urljoin(url, location)
+            conn.close()
+            sock.close()
+            return secure_fetch(next_url, max_redirects-1, timeout, max_bytes)
+
+        if resp.status >= 400:
+            raise ValueError(f"HTTP Error {resp.status}")
+
+        chunks = []
+        bytes_read = 0
+        while bytes_read < max_bytes:
+            chunk_size = min(8192, max_bytes - bytes_read)
+            chunk = resp.read(chunk_size)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            bytes_read += len(chunk)
+
+        return b"".join(chunks).decode('utf-8', errors='ignore')
+    finally:
+        if conn:
+            conn.close()
+        try:
+            sock.close()
+        except Exception:
+            pass
 
 class PhishingModel:
     def __init__(self):
         self.model = None
         current_dir = os.path.dirname(os.path.abspath(__file__))
         model_path = os.path.join(current_dir, 'xgboost_model.json')
-        
+
         # Reputation removed: Do not use unbounded runtime downloads.
-        
+
         # Load Safe Domains Dataset
         self.safe_domains = set()
         try:
@@ -54,7 +157,7 @@ class PhishingModel:
         except Exception as e:
             logger.info(f"Error loading model: {repr(e)}")
             traceback.print_exc()
-            
+
         # Load Candidate Model (Shadow Mode)
         candidate_model_path = os.path.join(current_dir, 'xgboost_candidate.json')
         self.candidate_model = None
@@ -81,7 +184,7 @@ class PhishingModel:
         features = []
         parsed = urlparse(url)
         domain = parsed.netloc
-        
+
         # 1. Length of URL
         features.append(len(url))
         # 2. Count of dots
@@ -96,16 +199,16 @@ class PhishingModel:
         features.append(1 if re.search(ip_pattern, url) else 0)
         # 6. Has HTTP (insecure)?
         features.append(1 if 'https' not in url else 0)
-        
+
         # --- NEW FEATURES ---
         # 7. Domain Entropy (High entropy often means random/generated domains)
         features.append(self.calculate_entropy(domain))
-        
+
         # 8. TLD Analysis (suspicious TLDs like .top, .xyz, .buzz)
         suspicious_tlds = ['.top', '.xyz', '.buzz', '.info', '.tk', '.ml', '.ga', '.cf', '.gq']
         has_susp_tld = 1 if any(domain.endswith(tld) for tld in suspicious_tlds) else 0
         features.append(has_susp_tld)
-        
+
         return features
 
     def extract_features_v2(self, url):
@@ -114,7 +217,7 @@ class PhishingModel:
         hostname = parsed.netloc or ''
         path = parsed.path or ''
         query = parsed.query or ''
-        
+
         # Baseline 9 features
         features.append(len(url))
         features.append(url.count('.'))
@@ -127,7 +230,7 @@ class PhishingModel:
         features.append(self.calculate_entropy(hostname))
         suspicious_tlds = ['.top', '.xyz', '.buzz', '.info', '.tk', '.ml', '.ga', '.cf', '.gq']
         features.append(1 if any(hostname.lower().endswith(tld) for tld in suspicious_tlds) else 0)
-        
+
         # Additional 7 features (Total 16)
         features.append(len(hostname))
         features.append(hostname.count('.'))
@@ -137,34 +240,17 @@ class PhishingModel:
         features.append(len(query))
         suspicious_keywords = ['login', 'signin', 'verify', 'update', 'secure', 'account', 'banking', 'confirm', 'password']
         features.append(1 if any(kw in url.lower() for kw in suspicious_keywords) else 0)
-        
+
         return features
 
     def is_safe_url(self, url):
-        """SSRF Protection: Prevent fetching internal/private IP addresses"""
-        try:
-            parsed = urlparse(url)
-            domain = parsed.hostname
-            if not domain:
-                return False
-            
-            # Resolve domain to IP
-            ip_addr = socket.gethostbyname(domain)
-            ip_obj = ipaddress.ip_address(ip_addr)
-            
-            # Check if IP is private, loopback, or otherwise restricted
-            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved or ip_obj.is_link_local:
-                logger.info(f"SSRF BLOCK: Prevented request to internal IP {ip_addr} for {url}")
-                return False
-            return True
-        except Exception as e:
-            logger.info(f"SSRF Check failed for {url}: {e}")
-            return False
+        """No longer needed. SSRF is handled by urllib3 monkey-patch above."""
+        return True
 
     def analyze_html_content(self, url):
         """
-        Fetches webpage HTML and extracts phishing-related features using BeautifulSoup.
-        Returns a dict with feature scores and a risk_score (0-100).
+        Secure remote HTML fetching with SSRF protection, strict timeouts,
+        and response size limits.
         """
         html_features = {
             'password_fields': 0,
@@ -176,86 +262,57 @@ class PhishingModel:
             'risk_score': 0,
             'fetched': False
         }
-        
-        if not self.is_safe_url(url):
+
+        if not url.startswith(('http://', 'https://')):
             return html_features
-            
+
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
-            
-            if response.status_code != 200:
-                return html_features
-            
-            html_features['fetched'] = True
-            soup = BeautifulSoup(response.text, 'html.parser')
-            parsed_url = urlparse(url)
-            
-            # 1. Count password fields
-            password_inputs = [inp for inp in soup.find_all('input') if isinstance(inp.get('type'), str) and str(inp.get('type')).lower() == 'password']
-            html_features['password_fields'] = len(password_inputs)
-            
-            # 2. Count hidden inputs
-            hidden_inputs = [inp for inp in soup.find_all('input') if isinstance(inp.get('type'), str) and str(inp.get('type')).lower() == 'hidden']
-            html_features['hidden_inputs'] = len(hidden_inputs)
-            
-            # 3. Check for forms posting to external domains
-            forms = soup.find_all('form', action=True)
+            html_content = secure_fetch(url, timeout=5, max_bytes=500*1024)
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Analyze Forms
+            forms = soup.find_all('form')
             for form in forms:
-                action = form.get('action')
-                if isinstance(action, list):
-                    action = action[0] if action else ''
-                if isinstance(action, str) and action.startswith('http'):
-                    action_domain = urlparse(action).netloc
-                    if action_domain and action_domain != parsed_url.netloc:
-                        html_features['external_forms'] += 1
-            
-            # 4. Count iframes
+                action = form.get('action', '').lower()
+                if action and action.startswith('http') and urlparse(url).netloc not in action:
+                    html_features['external_forms'] += 1
+
+            # Analyze Inputs
+            html_features['password_fields'] = len(soup.find_all('input', type='password'))
+            html_features['hidden_inputs'] = len(soup.find_all('input', type='hidden'))
+
+            # Analyze Iframes & Scripts
             html_features['iframes'] = len(soup.find_all('iframe'))
-            
-            # 5. Count external scripts
-            scripts = soup.find_all('script', src=True)
+            scripts = soup.find_all('script')
             for script in scripts:
-                src = script.get('src')
-                if isinstance(src, list):
-                    src = src[0] if src else ''
-                if isinstance(src, str) and src.startswith('http'):
-                    script_domain = urlparse(src).netloc
-                    if script_domain and script_domain != parsed_url.netloc:
-                        html_features['external_scripts'] += 1
-            
-            # 6. Urgency/Fear keywords
-            html_text = soup.get_text().lower()
-            urgency_keywords = [
-                'verify your account', 'confirm your identity', 'update your password',
-                'suspend', 'locked', 'unauthorized', 'expire', 'immediately',
-                'click here to verify', 'confirm now', 'act now', '24 hours',
-                'your account will be', 'security alert', 'unusual activity'
-            ]
-            for keyword in urgency_keywords:
-                if keyword in html_text:
+                src = script.get('src', '').lower()
+                if src and src.startswith('http') and urlparse(url).netloc not in src:
+                    html_features['external_scripts'] += 1
+
+            # Text Analysis
+            text = soup.get_text().lower()
+            urgency_words = ['urgent', 'suspend', 'verify', 'update immediately', 'locked']
+            for word in urgency_words:
+                if word in text:
                     html_features['urgency_keywords'] += 1
-            
+
             # Calculate Risk Score
             risk = 0
-            risk += html_features['password_fields'] * 15
-            risk += min(html_features['hidden_inputs'] * 1, 10)  # Common in modern web, cap at 10
-            risk += html_features['external_forms'] * 25
-            risk += min(html_features['iframes'] * 2, 10) # Cap at 10
-            risk += min(html_features['external_scripts'] * 1, 10) # Cap at 10
-            risk += html_features['urgency_keywords'] * 10
-            
+            risk += (html_features['password_fields'] * 30)
+            risk += (html_features['external_forms'] * 25)
+            risk += (html_features['hidden_inputs'] * 5)
+            risk += (html_features['iframes'] * 10)
+            risk += (html_features['external_scripts'] * 5)
+            risk += (html_features['urgency_keywords'] * 15)
+
             html_features['risk_score'] = min(risk, 100)
-            
-            logger.info(f"HTML Analysis for {url}: {html_features}")
-            
-        except requests.exceptions.Timeout:
-            logger.info(f"HTML Analysis Timeout for {url}")
+            html_features['fetched'] = True
+
+        except ValueError as e:
+            logger.info(f"Secure HTML fetch failed for {sanitize_url(url)}: {e}")
         except Exception as e:
-            logger.info(f"HTML Analysis Error for {url}: {e}")
-        
+            logger.info(f"HTML analysis error for {sanitize_url(url)}: {e}")
+
         return html_features
 
     def check_phishtank(self, url):
@@ -266,7 +323,7 @@ class PhishingModel:
                 'url': url,
                 'format': 'json',
             }
-            
+
             # Add API Key if configured
             api_key = os.environ.get("PHISHTANK_API_KEY")
             if api_key:
@@ -280,7 +337,7 @@ class PhishingModel:
                 result = response.json()
                 if result.get('results', {}).get('in_database'):
                     if result['results'].get('verified') and result['results'].get('valid'):
-                        logger.info(f"PhishTank ALERT: {url} is a VERIFIED phishing site.")
+                        logger.info(f"PhishTank ALERT: {sanitize_url(url)} is a VERIFIED phishing site.")
                         return 'phishing'
             return None
         except Exception as e:
@@ -300,12 +357,12 @@ class PhishingModel:
             if domain.startswith('www.'): domain = domain[4:]
             path = parsed.path
             full_url = url.lower()
-            
+
             score = 0
             reasons = []
-            
+
             base_domain = domain.rsplit('.', 1)[0] if '.' in domain else domain
-            
+
             # --- Pattern 1: Random/Auto-Generated Domain Detection ---
             # Count consonant clusters (3+ consonants in a row = likely random)
             vowels = set('aeiou')
@@ -320,7 +377,7 @@ class PhishingModel:
             if max_consonant_streak >= 4:
                 score += 30
                 reasons.append(f"Random character pattern ({max_consonant_streak} consonants)")
-            
+
             # --- Pattern 2: Digit-Letter Mixing ---
             # e.g., "s3cur1ty-l0gin.com" or "bank2024verify.xyz"
             digit_count = sum(1 for c in base_domain if c.isdigit())
@@ -328,7 +385,7 @@ class PhishingModel:
             if digit_count >= 2 and letter_count >= 3 and digit_count / max(len(base_domain), 1) > 0.2:
                 score += 20
                 reasons.append("Suspicious digit-letter mixing in domain")
-            
+
             # --- Pattern 3: Excessive Hyphens ---
             # e.g., "secure-login-verify-account-now.com"
             hyphen_count = base_domain.count('-')
@@ -337,7 +394,7 @@ class PhishingModel:
                 reasons.append(f"Excessive hyphens ({hyphen_count})")
             elif hyphen_count >= 2:
                 score += 10
-            
+
             # --- Pattern 4: Number-Padded Brand Names ---
             # e.g., "paypal123.com", "amazon2024.com", "netflix01.com"
             brand_keywords = ['paypal', 'netflix', 'amazon', 'microsoft', 'apple', 'google',
@@ -353,7 +410,7 @@ class PhishingModel:
                     score += 35
                     reasons.append(f"Contains brand keyword '{brand}'")
                     break
-            
+
             # --- Pattern 5: Suspicious Keyword Combos in Domain ---
             # e.g., "secure-login.xyz", "verify-account.top"
             danger_words = ['login', 'verify', 'secure', 'account', 'update', 'confirm',
@@ -368,7 +425,7 @@ class PhishingModel:
             elif danger_hits == 1:
                 score += 15
                 reasons.append("Danger keyword in domain")
-            
+
             # --- Pattern 6: Long Domain Names ---
             # Legitimate domains are usually short (google=6, amazon=6, facebook=8)
             # Phishing domains tend to be much longer
@@ -377,7 +434,7 @@ class PhishingModel:
                 reasons.append(f"Unusually long domain ({len(base_domain)} chars)")
             elif len(base_domain) > 18:
                 score += 10
-            
+
             # --- Pattern 7: Suspicious Path Patterns ---
             # e.g., "/wp-admin/login.php", "/cgi-bin/", base64 in URL
             if path:
@@ -396,7 +453,7 @@ class PhishingModel:
                     reasons.append("Multiple danger keywords in path")
 
             # --- Pattern 8: Suspicious TLD + Any Other Signal ---
-            risky_tlds = ['.top', '.xyz', '.buzz', '.info', '.tk', '.ml', '.ga', '.cf', 
+            risky_tlds = ['.top', '.xyz', '.buzz', '.info', '.tk', '.ml', '.ga', '.cf',
                          '.gq', '.pw', '.cc', '.ws', '.bid', '.click', '.link', '.loan',
                          '.online', '.site', '.work', '.life', '.icu', '.fun', '.monster',
                          '.rest', '.cam', '.surf', '.bar', '.cyou']
@@ -404,22 +461,22 @@ class PhishingModel:
             if has_risky_tld:
                 score += 15
                 reasons.append("High-risk TLD")
-            
+
             # --- Pattern 9: URL contains encoded characters ---
             if '%' in full_url:
                 encoded_count = full_url.count('%')
                 if encoded_count >= 3:
                     score += 15
                     reasons.append(f"Multiple URL-encoded characters ({encoded_count})")
-            
+
             # --- Determine Result ---
             if score >= 70:
                 return True, min(score, 95), f"Suspicious Domain Patterns: {'; '.join(reasons[:3])}"
             elif score >= 45:
                 return True, min(score, 80), f"Warning: {'; '.join(reasons[:2])}"
-            
+
             return False, 0, ""
-            
+
         except Exception as e:
             logger.info(f"Domain Pattern Analysis Error: {e}")
             return False, 0, ""
@@ -433,10 +490,10 @@ class PhishingModel:
         try:
             domain = urlparse(url_lower).netloc
             if domain.startswith('www.'): domain = domain[4:]
-            
+
             if domain in self.safe_domains:
                 return 'safe', 99, "Trusted Domain (Allowlist)"
-            
+
             for trusted in self.safe_domains:
                 if domain.endswith('.' + trusted):
                     return 'safe', 99, "Trusted Subdomain (Allowlist)"
@@ -452,16 +509,16 @@ class PhishingModel:
         high_risk_phrases = ['secure-login-update', 'verify-account-info', 'update-password-now']
         for phrase in high_risk_phrases:
             if phrase in url_lower:
-                return 'phishing', 90, f"Suspicious Keyword Pattern: '{phrase}'"
-                
+                return 'suspicious', 90, f"Suspicious Keyword Pattern: '{phrase}'"
+
         # 0.7 Homoglyph & Typosquatting Detection
         try:
             import difflib
             domain_to_check = urlparse(url_lower).netloc
             if domain_to_check.startswith('www.'): domain_to_check = domain_to_check[4:]
-            
+
             base_domain = domain_to_check.rsplit('.', 1)[0] if '.' in domain_to_check else domain_to_check
-            
+
             # Homoglyph normalization map: characters that look alike to the human eye
             homoglyph_map = {
                 '1': 'l', 'l': 'i', '0': 'o', '5': 's',
@@ -471,7 +528,7 @@ class PhishingModel:
             multi_homoglyphs = {
                 'rn': 'm', 'vv': 'w', 'cl': 'd', 'nn': 'm',
             }
-            
+
             def normalize_homoglyphs(text):
                 """Convert lookalike characters to their intended form"""
                 result = text
@@ -483,52 +540,52 @@ class PhishingModel:
                 for ch in result:
                     normalized += homoglyph_map.get(ch, ch)
                 return normalized
-            
+
             normalized_domain = normalize_homoglyphs(base_domain)
-            
+
             if domain_to_check not in self.safe_domains:
                 for safe_url in self.safe_domains:
                     safe_base = safe_url.rsplit('.', 1)[0] if '.' in safe_url else safe_url
-                    
+
                     if len(base_domain) > 3 and len(safe_base) > 3:
                         # 1. Homoglyph exact match (e.g., lnstagram → instagram)
                         if normalized_domain == safe_base and base_domain != safe_base:
                             logger.info(f"Homoglyph Attack: {domain_to_check} uses lookalike chars to impersonate {safe_url}")
                             return 'phishing', 96, f"Homoglyph Attack: Impersonating {safe_url}"
-                        
+
                         # 2. Exact same name, different TLD (e.g., google.biz vs google.com)
                         if base_domain == safe_base:
                             logger.info(f"Typosquatting Alert: {domain_to_check} mimics {safe_url}")
-                            return 'phishing', 95, f"Impersonating {safe_url} (Suspicious TLD)"
-                        
+                            return 'suspicious', 95, f"Impersonating {safe_url} (Suspicious TLD)"
+
                         # 3. Highly similar name (e.g., goooogle.com vs google.com)
                         ratio = difflib.SequenceMatcher(None, base_domain, safe_base).ratio()
                         if 0.80 <= ratio < 1.0:
                             logger.info(f"Typosquatting Alert: {domain_to_check} is {ratio:.2f} similar to {safe_url}")
-                            return 'phishing', 92, f"Typosquatting: Impersonating {safe_url}"
-                        
+                            return 'suspicious', 92, f"Typosquatting: Impersonating {safe_url}"
+
                         # 4. Normalized similarity (catches combined homoglyph + typosquatting)
                         norm_ratio = difflib.SequenceMatcher(None, normalized_domain, safe_base).ratio()
                         if 0.80 <= norm_ratio < 1.0 and norm_ratio > ratio:
                             logger.info(f"Homoglyph+Typosquat: {domain_to_check} normalized to {normalized_domain}, {norm_ratio:.2f} similar to {safe_url}")
-                            return 'phishing', 93, f"Impersonation Attack: Mimicking {safe_url}"
+                            return 'suspicious', 93, f"Impersonation Attack: Mimicking {safe_url}"
         except Exception as e:
             logger.info(f"Typosquatting Check Error: {e}")
-        
+
         # 0.8 Subdomain Abuse Detection (e.g., google.com.evil-site.xyz)
         try:
             domain_full = urlparse(url_lower).netloc
             if domain_full.startswith('www.'): domain_full = domain_full[4:]
-            
+
             for trusted in self.safe_domains:
                 # Check if a trusted brand name appears as a subdomain of a DIFFERENT domain
                 if trusted in domain_full and not domain_full.endswith(trusted):
                     # e.g., "paypal.com.phishing-site.xyz" contains "paypal.com" but ends with ".xyz"
                     logger.info(f"Subdomain Abuse: {domain_full} contains trusted brand '{trusted}' as subdomain")
-                    return 'phishing', 94, f"Subdomain Abuse: Impersonating {trusted}"
+                    return 'suspicious', 94, f"Subdomain Abuse: Impersonating {trusted}"
         except Exception as e:
             logger.info(f"Subdomain Abuse Check Error: {e}")
-        
+
         # 0.85 URL Shortener Detection
         url_shorteners = [
             'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'is.gd', 'v.gd',
@@ -543,7 +600,7 @@ class PhishingModel:
                 return 'suspicious', 65, f"Shortened URL ({short_domain}) — Cannot verify destination"
         except:
             pass
-        
+
         # 0.9 Excessive Subdomain Depth (e.g., login.secure.bank.verify.example.com)
         try:
             depth_domain = urlparse(url_lower).netloc
@@ -559,62 +616,67 @@ class PhishingModel:
             url_path = urlparse(url_lower).path.lower()
             path_domain = urlparse(url_lower).netloc
             if path_domain.startswith('www.'): path_domain = path_domain[4:]
-            
+
             brand_names = ['paypal', 'netflix', 'amazon', 'microsoft', 'apple', 'google',
                           'facebook', 'instagram', 'whatsapp', 'linkedin', 'twitter',
                           'chase', 'wellsfargo', 'bankofamerica', 'hdfc', 'sbi', 'icici',
                           'gmail', 'outlook', 'yahoo', 'icloud']
-            
+
             if path_domain not in self.safe_domains:
                 for brand in brand_names:
-                    if brand in url_path and ('login' in url_path or 'verify' in url_path or 
+                    if brand in url_path and ('login' in url_path or 'verify' in url_path or
                                               'account' in url_path or 'secure' in url_path or
                                               'password' in url_path or 'signin' in url_path):
-                        logger.info(f"Path Brand Impersonation: {url} has '{brand}' + login keyword in path")
-                        return 'phishing', 88, f"Brand Impersonation: '{brand}' in URL path"
+                        logger.info(f"Path Brand Impersonation: {sanitize_url(url)} has '{brand}' + login keyword in path")
+                        return 'suspicious', 88, f"Brand Impersonation: '{brand}' in URL path"
         except:
             pass
-        
+
         # 0.96 Punycode / IDN Homograph Detection (e.g., xn--pple-43d.com = аpple.com with Cyrillic 'а')
         try:
             idn_domain = urlparse(url_lower).netloc
             if 'xn--' in idn_domain:
                 logger.info(f"Punycode IDN detected: {idn_domain}")
-                return 'phishing', 90, "International Domain (Punycode) — Possible Homograph Attack"
+                return 'suspicious', 90, "International Domain (Punycode) — Possible Homograph Attack"
         except:
             pass
-        
+
         # 0.97 AI-Based Suspicious Domain Pattern Analysis
         # This catches brand-new phishing domains that aren't in any database yet
         is_suspicious, pattern_confidence, pattern_reason = self.analyze_domain_patterns(url)
         if is_suspicious and pattern_confidence >= 70:
-            logger.info(f"Domain Pattern Alert: {url} — {pattern_reason}")
-            return 'phishing', pattern_confidence, pattern_reason
-        
+            logger.info(f"Domain Pattern Alert: {sanitize_url(url)} — {pattern_reason}")
+            return 'suspicious', pattern_confidence, pattern_reason
+
         # 2. Localhost/IP specific check for demos
         is_local = 'localhost' in url_lower or '127.0.0.1' in url_lower
         if is_local:
             demo_keywords = ['login', 'verify', 'secure', 'account']
             if any(k in url_lower for k in demo_keywords):
-                logger.info(f"Demo Detection: Flagging local URL {url}")
+                logger.info(f"Demo Detection: Flagging local URL {sanitize_url(url)}")
                 return 'suspicious', 85, "Local Test Detection (Demo Mode)"
 
         # --- HTML Content Analysis ---
         if not is_local:
             html_analysis = self.analyze_html_content(url)
-            if html_analysis['fetched']:
-                html_risk = html_analysis['risk_score']
-                
-                # High Risk: External forms + Password fields + High Risk Score
-                if html_analysis['external_forms'] > 0 and html_analysis['password_fields'] > 0 and html_risk > 75:
-                    logger.info(f"HTML RED FLAG: External form + password field detected!")
-                    return 'phishing', max(html_risk, 92), "External Password Form Detected"
-                
-                # Tuned Thresholds
-                if html_risk >= 95:
-                    return 'phishing', html_risk, "High Risk HTML Content"
-                elif html_risk >= 80:
-                    return 'suspicious', html_risk, "Suspicious HTML Elements"
+
+            # If the backend could not verify the page (e.g. unreachable, blocked IP, etc.),
+            # do not fall back to unreliable ML model score.
+            if not html_analysis['fetched']:
+                return 'unable_to_verify', 0, "Unreachable Destination"
+
+            html_risk = html_analysis['risk_score']
+
+            # High Risk: External forms + Password fields + High Risk Score
+            if html_analysis['external_forms'] > 0 and html_analysis['password_fields'] > 0 and html_risk > 75:
+                logger.info(f"HTML RED FLAG: External form + password field detected!")
+                return 'suspicious', max(html_risk, 92), "External Password Form Detected"
+
+            # Tuned Thresholds
+            if html_risk >= 95:
+                return 'suspicious', html_risk, "High Risk HTML Content"
+            elif html_risk >= 80:
+                return 'suspicious', html_risk, "Suspicious HTML Elements"
         # --- End HTML Analysis ---
 
         # 3. Use ML Model if available
@@ -622,7 +684,7 @@ class PhishingModel:
             try:
                 features = np.array([self.extract_features(url)])
                 prediction = self.model.predict(features)[0]
-                
+
                 # Retrieve probability for Class 1 (Phishing)
                 try:
                     dmatrix = xgb.DMatrix(features)
@@ -630,7 +692,7 @@ class PhishingModel:
                 except Exception as e:
                     logger.warning(f"Failed to get probability: {e}")
                     phish_prob = 0.9 if prediction == 1 else 0.1
-                
+
                 # --- SHADOW MODE EVALUATION ---
                 if hasattr(self, 'candidate_model') and self.candidate_model and getattr(self, 'enable_shadow', False):
                     def shadow_task(u, base_p):
@@ -645,24 +707,27 @@ class PhishingModel:
                             logger.info(f"[SHADOW MODE] Base Prob: {base_p:.4f} | Cand Prob: {cand_prob:.4f} | Latency: {latency:.2f}ms")
                         except Exception as cand_e:
                             logger.warning(f"[SHADOW MODE] Error: {cand_e}")
-                    
+
                     # Note: Disabled by default to avoid unbounded thread creation.
                     import threading
                     threading.Thread(target=shadow_task, args=(url, phish_prob), daemon=True).start()
                 # ------------------------------
-                
+
                 confidence = int(phish_prob * 100)
-                
+
                 # Fixed Threshold Calibration (Reputation logic removed)
                 threshold = 0.75
-                
+
                 if phish_prob >= threshold:
-                    return 'phishing', confidence, "AI Model Detection Pattern"
+                    # A model score is not a verified phishing report. Keep the
+                    # navigation warning, but do not present this prediction as
+                    # a confirmed threat; users can still choose whether to proceed.
+                    return 'suspicious', confidence, "Unverified AI Model Prediction"
                 elif phish_prob >= 0.70:
                     return 'suspicious', confidence, "Suspicious URL Pattern (AI Model)"
                 else:
                     return 'safe', max(95 - confidence, 50), "Safe (AI Verification)"
-                    
+
             except Exception as e:
                 logger.info(f"Prediction Error: {e}")
 

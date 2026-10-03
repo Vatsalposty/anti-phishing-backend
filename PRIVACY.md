@@ -1,20 +1,11 @@
-# Privacy Policy
+# Privacy Summary — Anti-Phishing AI Guard
 
-**Effective Date: August 2026**
+The extension checks HTTP and HTTPS URLs using the configured backend. A scan can send the full URL to that backend, and the backend may send it to PhishTank for a threat lookup and request the destination page for limited HTML analysis. The destination request does not use browser cookies or execute page JavaScript.
 
-## 1. Information We Collect
-The Anti-Phishing AI Guard extension operates in real-time to protect you from malicious websites. To achieve this, it temporarily processes the URLs of the websites you visit. 
+URLs may contain sensitive data in their paths or query strings. Query strings and fragments are removed from server logs and Firebase records, but paths are retained. When Firebase is configured, phishing/suspicious detections and user-submitted reports may be stored with status, timestamps, and counts. The service does not currently apply an automatic retention period to these records.
 
-**We DO NOT:**
-* Store your browsing history.
-* Collect Personally Identifiable Information (PII).
-* Sell or share your data with third parties.
+The extension stores recent scan history, including full URLs, and settings locally in browser storage. Users can clear the scan history in the extension. URLs are shared with the configured backend, PhishTank, and the destination host as required for scanning. The project does not sell URL data.
 
-## 2. How We Use the Information
-When you visit a website, the URL is sent securely to our backend API to be analyzed by our Machine Learning model against global threat databases. The URL is processed in memory and discarded immediately after a safety verdict (Safe, Suspicious, or Phishing) is returned to your browser. 
+This project does not guarantee that a site is safe or malicious. An unable-to-verify result means the scan did not complete.
 
-## 3. Local Storage
-Your custom settings (e.g., your whitelist of safe domains, developer mode toggles) are stored strictly locally on your device using the Chrome Storage API. This data never leaves your browser.
-
-## 4. Contact
-For any concerns regarding privacy, please contact the developer via this GitHub repository.
+For questions or data deletion requests, contact the project maintainer through the repository.

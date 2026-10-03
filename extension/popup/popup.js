@@ -17,11 +17,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                             hostname = new URL(originalUrl).hostname;
                         } catch(e) {}
                     }
+                } else if (tab.url.startsWith('file:')) {
+                    hostname = 'Local File';
+                } else if (tab.url.startsWith('chrome:')) {
+                    hostname = 'Chrome Page';
+                } else if (tab.url.startsWith('chrome-extension:')) {
+                    hostname = 'Extension Page';
                 } else if (!hostname) {
-                    if (tab.url.startsWith('file:')) hostname = 'Local File';
-                    else if (tab.url.startsWith('chrome:')) hostname = 'Chrome Page';
-                    else if (tab.url.startsWith('chrome-extension:')) hostname = 'Extension Page';
-                    else hostname = tab.url;
+                    hostname = tab.url;
                 }
             } catch (e) {
                 hostname = "Invalid URL";
@@ -35,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     updateUI({ status: 'disabled' });
                 } else {
                     if (hostname === "Local File" || hostname === "Chrome Page" || hostname === "Extension Page") {
-                        updateUI({ status: 'safe', confidence: 100 });
+                        updateUI({ status: 'not_scanned' });
                     } else {
                         updateUI({ status: 'scanning' });
 
@@ -169,6 +172,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     function updateUI(data) {
+        const knownStatuses = new Set([
+            'phishing', 'suspicious', 'safe', 'scanning', 'error', 'unable_to_verify',
+            'local_network', 'not_scanned', 'whitelisted', 'previously_checked', 'disabled'
+        ]);
+        if (!data || !knownStatuses.has(data.status)) {
+            data = { status: 'unable_to_verify', reason: 'Unknown scan result' };
+        }
+
         const statusCard = document.getElementById('status-card');
         const statusText = document.getElementById('status-text');
         const shieldCheck = document.querySelector('.shield-check');
@@ -176,8 +187,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const trustScore = document.getElementById('trust-score');
         const container = document.querySelector('.container');
         const root = document.documentElement;
+        const urlLabel = document.querySelector('.url-box .label');
+
+        if (urlLabel) urlLabel.textContent = "Analyzing Protection";
 
         statusCard.classList.remove('safe', 'phishing', 'error');
+        statusCard.style.border = '';
         container.classList.remove('phishing-bg');
 
         const footerText = document.querySelector('footer span');
@@ -220,16 +235,87 @@ document.addEventListener('DOMContentLoaded', async () => {
             footerText.style.color = "var(--text-muted)";
             pulseDot.style.background = "var(--safe-gradient)";
             pulseDot.style.animation = "";
-        } else if (data.status === 'error') {
-            statusCard.classList.add('error');
-            statusText.textContent = 'Offline';
-            shieldCheck.style.display = 'none';
-            shieldAlert.style.display = 'block';
-            trustScore.textContent = 'ERR';
+        } else if (data.status === 'safe') {
+            statusCard.classList.add('safe');
+            statusText.textContent = 'No Threats Detected';
+            if (urlLabel) urlLabel.textContent = "Analysis completed — always stay vigilant";
+            shieldCheck.style.display = 'block';
+            shieldAlert.style.display = 'none';
+            trustScore.textContent = `${data.confidence || 98}%`;
+            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)');
 
             footerText.textContent = "AI PROTECTION ACTIVE";
             footerText.style.color = "var(--text-muted)";
-            pulseDot.style.background = "#555";
+            pulseDot.style.background = "var(--safe-gradient)";
+            pulseDot.style.animation = "";
+        } else if (data.status === 'error' || data.status === 'unable_to_verify') {
+            statusCard.classList.add('error');
+            statusText.textContent = 'Unable to verify';
+            shieldCheck.style.display = 'none';
+            shieldAlert.style.display = 'block';
+            trustScore.textContent = 'ERR';
+            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #9e9e9e 0%, #757575 100%)');
+
+            if (urlLabel) {
+                if (data.reason === 'Unreachable Destination' || data.reason === 'Backend connection failed') {
+                    urlLabel.textContent = "Backend scan failed.";
+                } else if (typeof data.reason === 'string' && data.reason.startsWith('Navigation failed')) {
+                    urlLabel.textContent = "Browser could not reach this site.";
+                } else {
+                    urlLabel.textContent = "Site could not be checked.";
+                }
+            }
+            footerText.textContent = "CONNECTION FAILED";
+            footerText.style.color = "#757575";
+            pulseDot.style.background = "#757575";
+        } else if (data.status === 'local_network') {
+            // Local network / captive portal — not scanned by remote AI
+            statusText.textContent = 'Local Network';
+            shieldCheck.style.display = 'none';
+            shieldAlert.style.display = 'none';
+            trustScore.textContent = 'LAN';
+            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)');
+
+            footerText.textContent = "LOCAL NETWORK — NOT SCANNED";
+            footerText.style.color = "#818cf8";
+            pulseDot.style.background = "#6366f1";
+            pulseDot.style.animation = "";
+        } else if (data.status === 'not_scanned') {
+            statusText.textContent = 'Not scanned';
+            shieldCheck.style.display = 'none';
+            shieldAlert.style.display = 'none';
+            trustScore.textContent = 'N/A';
+            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #9ca3af 0%, #d1d5db 100%)');
+
+            footerText.textContent = "INTERNAL PAGE — NOT SCANNED";
+            footerText.style.color = "#9ca3af";
+            pulseDot.style.background = "#9ca3af";
+            pulseDot.style.animation = "";
+        } else if (data.status === 'whitelisted') {
+            statusText.textContent = 'Trusted/allowlisted';
+            shieldCheck.style.display = 'none';
+            shieldAlert.style.display = 'none';
+            trustScore.textContent = 'WHT';
+            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #9ca3af 0%, #d1d5db 100%)');
+
+            if (urlLabel) urlLabel.textContent = "Bypassed analysis via allowlist";
+            footerText.textContent = "USER ALLOWLISTED — NOT SCANNED";
+            footerText.style.color = "#9ca3af";
+            pulseDot.style.background = "#9ca3af";
+            pulseDot.style.animation = "none";
+        } else if (data.status === 'previously_checked') {
+            statusCard.classList.add('safe');
+            statusText.textContent = 'Previously checked';
+            shieldCheck.style.display = 'block';
+            shieldAlert.style.display = 'none';
+            trustScore.textContent = `${data.confidence || 99}%`;
+            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)');
+
+            if (urlLabel) urlLabel.textContent = "Analysis cached from recent scan";
+            footerText.textContent = "CACHED RESULT";
+            footerText.style.color = "var(--text-muted)";
+            pulseDot.style.background = "var(--safe-gradient)";
+            pulseDot.style.animation = "none";
         } else if (data.status === 'disabled') {
             statusCard.classList.add('error');
             statusCard.style.border = '1px solid var(--text-muted)';
@@ -243,18 +329,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             footerText.style.color = "#f5576c";
             pulseDot.style.background = "#f5576c";
             pulseDot.style.animation = 'none';
-        } else {
-            statusCard.classList.add('safe');
-            statusText.textContent = 'Safe Website';
-            shieldCheck.style.display = 'block';
-            shieldAlert.style.display = 'none';
-            trustScore.textContent = `${data.confidence || 98}%`;
-            root.style.setProperty('--safe-gradient', 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)');
-
-            footerText.textContent = "AI PROTECTION ACTIVE";
-            footerText.style.color = "var(--text-muted)";
-            pulseDot.style.background = "var(--safe-gradient)";
-            pulseDot.style.animation = "";
         }
     }
 

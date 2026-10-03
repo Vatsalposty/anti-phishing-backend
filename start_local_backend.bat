@@ -8,10 +8,15 @@ echo     Anti-Phishing AI Guard - Local Backend Launcher
 echo  ===========================================================
 echo(
 
-echo  [INFO] Using global Python environment...
-python -c "import uvicorn" >nul 2>&1
+set "PYTHON_CMD=python"
+if exist "%~dp0backend\venv\Scripts\python.exe" set "PYTHON_CMD=%~dp0backend\venv\Scripts\python.exe"
+if exist "%~dp0backend\.venv\Scripts\python.exe" set "PYTHON_CMD=%~dp0backend\.venv\Scripts\python.exe"
+
+echo  [INFO] Checking Python environment: %PYTHON_CMD%
+"%PYTHON_CMD%" -c "import uvicorn, fastapi, xgboost" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo  [ERROR] Uvicorn is not installed in the global environment!
+    echo  [ERROR] Backend dependencies are missing from this Python environment.
+    echo  [INFO] Create backend\.venv and install backend\requirements.txt, or install dependencies into Python on PATH.
     pause
     exit /b 1
 )
@@ -36,7 +41,7 @@ echo(
 echo  Press Ctrl+C to stop the server.
 echo(
 
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+"%PYTHON_CMD%" -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 
 echo(
 echo  ===========================================================

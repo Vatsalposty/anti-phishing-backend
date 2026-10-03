@@ -5,13 +5,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load history from storage
     chrome.storage.local.get({ scanHistory: [], totalScans: 0 }, (items) => {
         fullHistory = items.scanHistory;
-        
+
         // Update stats
         document.getElementById('total-count').textContent = items.totalScans;
-        
+
         const safeCount = fullHistory.filter(h => h.status === 'safe').length;
         const threatCount = fullHistory.filter(h => h.status === 'phishing' || h.status === 'suspicious').length;
-        
+
         document.getElementById('safe-count').textContent = safeCount;
         document.getElementById('threat-count').textContent = threatCount;
 
@@ -41,10 +41,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update active class
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             e.target.classList.add('active');
-            
+
             currentFilter = e.target.dataset.filter;
             const searchQuery = document.getElementById('search-input').value.toLowerCase();
-            
+
             applyFilters(searchQuery, currentFilter);
         });
     });
@@ -54,9 +54,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Apply text search
         if (query) {
-            filtered = filtered.filter(item => 
-                item.url.toLowerCase().includes(query) || 
-                (item.reason && item.reason.toLowerCase().includes(query))
+            filtered = filtered.filter(item =>
+                String(item.url || '').toLowerCase().includes(query) ||
+                String(item.reason || '').toLowerCase().includes(query)
             );
         }
 
@@ -85,11 +85,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         items.forEach(item => {
             const timeAgo = getTimeAgo(item.timestamp);
-            
+
             let icon = '';
             let badgeClass = '';
             let confidenceClass = '';
-            
+
             if (item.status === 'phishing') {
                 icon = '🚨';
                 badgeClass = 'badge-phishing';
@@ -98,47 +98,77 @@ document.addEventListener('DOMContentLoaded', () => {
                 icon = '⚠️';
                 badgeClass = 'badge-suspicious';
                 confidenceClass = 'confidence-suspicious';
-            } else {
+            } else if (item.status === 'safe' || item.status === 'previously_checked') {
                 icon = '✅';
                 badgeClass = 'badge-safe';
                 confidenceClass = 'confidence-safe';
+            } else {
+                icon = 'ℹ️';
+                badgeClass = 'badge-unverified';
+                confidenceClass = 'confidence-unverified';
             }
 
             const div = document.createElement('div');
             div.className = 'history-item';
-            div.innerHTML = `
-                <div class="status-badge ${badgeClass}">${icon}</div>
-                <div class="item-info">
-                    <div class="item-domain" title="${item.fullUrl}">${item.url}</div>
-                    <div class="item-reason">${item.reason || (item.status === 'safe' ? 'Verified Safe' : 'Detected')}</div>
-                </div>
-                <div class="item-meta">
-                    <div class="item-confidence ${confidenceClass}">${item.confidence}%</div>
-                    <div class="item-time">${timeAgo}</div>
-                </div>
-            `;
+
+            const badge = document.createElement('div');
+            badge.className = `status-badge ${badgeClass}`;
+            badge.textContent = icon;
+
+            const info = document.createElement('div');
+            info.className = 'item-info';
+            const domain = document.createElement('div');
+            domain.className = 'item-domain';
+            domain.title = String(item.fullUrl || '');
+            domain.textContent = String(item.url || 'Unknown URL');
+            const reason = document.createElement('div');
+            reason.className = 'item-reason';
+            const fallbackReason = item.status === 'safe' || item.status === 'previously_checked'
+                ? 'No threat detected'
+                : item.status === 'phishing'
+                ? 'Phishing indicators detected'
+                : item.status === 'suspicious'
+                ? 'Suspicious indicators detected'
+                : item.status === 'unable_to_verify'
+                ? 'Unable to verify — scan incomplete'
+                : 'Not scanned';
+            reason.textContent = String(item.reason || fallbackReason);
+            info.append(domain, reason);
+
+            const meta = document.createElement('div');
+            meta.className = 'item-meta';
+            const confidence = document.createElement('div');
+            confidence.className = `item-confidence ${confidenceClass}`;
+            const confidenceValue = Number(item.confidence);
+            confidence.textContent = Number.isFinite(confidenceValue) ? `${confidenceValue}%` : '—';
+            const time = document.createElement('div');
+            time.className = 'item-time';
+            time.textContent = timeAgo;
+            meta.append(confidence, time);
+
+            div.append(badge, info, meta);
             list.appendChild(div);
         });
     }
 
     function getTimeAgo(timestamp) {
         const seconds = Math.floor((new Date() - timestamp) / 1000);
-        
+
         let interval = seconds / 31536000;
         if (interval > 1) return Math.floor(interval) + " years ago";
-        
+
         interval = seconds / 2592000;
         if (interval > 1) return Math.floor(interval) + " months ago";
-        
+
         interval = seconds / 86400;
         if (interval > 1) return Math.floor(interval) + " days ago";
-        
+
         interval = seconds / 3600;
         if (interval > 1) return Math.floor(interval) + " hours ago";
-        
+
         interval = seconds / 60;
         if (interval > 1) return Math.floor(interval) + " mins ago";
-        
+
         if (seconds < 10) return "just now";
         return Math.floor(seconds) + " secs ago";
     }

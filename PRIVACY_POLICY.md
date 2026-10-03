@@ -1,33 +1,29 @@
 # Privacy Policy for Anti-Phishing AI Guard
 
-**Effective Date:** 2026-08-28
+**Effective date:** October 3, 2026
 
-Thank you for choosing Anti-Phishing AI Guard ("the Extension"). We are committed to protecting your privacy and security. This Privacy Policy explains what information we collect, how we use it, and your rights regarding your data.
+This policy describes the current repository implementation. The operator should verify it against the deployed backend and hosting configuration before publishing it.
 
-## 1. Information We Collect
-To provide real-time protection against phishing and malicious websites, the Extension collects and processes the following information:
-*   **Website URLs:** When you navigate to a webpage, the Extension securely reads the active tab's URL.
-*   **User Reports:** If you explicitly click the "Report Suspicious" button, the URL of the current page is sent to our database to help protect the community.
+## Information processed
 
-## 2. How We Use Your Information
-*   **Real-time Threat Analysis:** The URLs you visit are securely transmitted to our backend API to be analyzed by our AI and heuristic engines. 
-*   **Community Protection:** Manually reported URLs are stored in our database for manual review and to improve our machine learning models.
+When protection is enabled, the extension sends the full HTTP or HTTPS URL to the configured analysis backend. A URL can contain sensitive information in its path or query string. The backend uses URL rules and a machine-learning model, submits the URL to PhishTank for lookup, and makes a limited request to the destination site to inspect selected HTML features. That request does not include the user's browser cookies and does not execute the page's JavaScript.
 
-## 3. Data Storage and Retention
-*   **No Tracking:** We do NOT track your browsing history. The URLs sent for real-time analysis are processed in memory and immediately discarded unless they are explicitly reported by you.
-*   **Local Storage:** Your scan history, total blocked count, and application settings are stored locally on your device using Chrome's secure local storage. This data never leaves your device unless you export it yourself.
-*   **Reported URLs:** URLs you manually report are stored securely in a Firebase cloud database.
+## Storage and retention
 
-## 4. Information Sharing
-We do not sell, rent, or share your personal information or browsing data with third parties, advertisers, or data brokers.
+- **On the device:** The extension stores recent scan history, including the full URL, in browser storage. Users can clear the scan history from the extension. Settings and counters are also stored locally.
+- **Backend logs:** URLs are logged with their query strings and fragments removed. The URL path is retained and could itself contain sensitive information.
+- **Firebase, if configured:** Phishing/suspicious detections and user-submitted reports are stored with the sanitized URL, status/reason, timestamps, and counts. Query strings and fragments are removed, but URL paths are retained. The current code does not define an automatic deletion or retention period.
 
-## 5. Security
-We implement strict security measures to protect the information processed by the Extension. All communication between the Extension and our analysis backend is encrypted via HTTPS.
+The project does not sell URL data. URL data is shared with the configured backend, PhishTank, the destination host for page retrieval, and service providers used to operate the backend (including Firebase and the configured host).
 
-## 6. Your Rights
-Because we do not store your browsing history on our servers, there is no personal data for us to delete. You have full control over the local data stored on your device:
-*   You can clear your scan history at any time from the Extension's popup interface.
-*   You can uninstall the Extension at any time, which will immediately delete all locally stored data.
+## User controls
 
-## 7. Contact Us
-If you have any questions or concerns about this Privacy Policy or our data practices, please contact the developer via the support link on our Chrome Web Store page.
+Users can clear local scan history in the extension and can disable protection in settings. Disabling protection stops new analysis requests but does not delete previously stored backend records. To request deletion of server-side records, contact the project maintainer through the repository and include enough information to locate the record.
+
+## Security and limitations
+
+The extension and backend use security controls, including HTTPS for the configured production API and restrictions on server-side URL fetching. No security product can guarantee that every classification is correct. **Unable to verify** means the scan did not complete; it is neither a phishing verdict nor proof that the site is safe.
+
+## Contact
+
+For privacy questions or deletion requests, contact the project maintainer through the repository.

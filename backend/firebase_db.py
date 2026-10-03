@@ -51,10 +51,14 @@ def sanitize_url(url: str) -> str:
     try:
         parsed = urlparse(url)
         # Reconstruct URL without query and fragment
-        sanitized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        # URL authorities may contain user:password@host; never persist that
+        # userinfo even though it is part of the parsed netloc.
+        safe_netloc = parsed.netloc.rsplit('@', 1)[-1]
+        sanitized = f"{parsed.scheme}://{safe_netloc}{parsed.path}"
         return sanitized.rstrip('/')
     except Exception:
-        return url
+        # Fallback to prevent raw URL logging on parse error
+        return "https://invalid-url-sanitization-failed"
 
 def log_attempt(url, status, confidence):
     sanitized_url = sanitize_url(url)

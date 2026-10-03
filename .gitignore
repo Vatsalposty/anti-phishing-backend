@@ -24,3 +24,6 @@ backend/training_data/
 backend/.env
 backend/serviceAccountKey.json
 *serviceAccountKey*.json
+
+# Node modules
+tests/node_modules/

@@ -1,0 +1,9 @@
+{
+  "name": "anti-phishing-tests",
+  "version": "1.0.0",
+  "description": "Minimal pinned dependency for synthetic offline testing",
+  "private": true,
+  "dependencies": {
+    "jsdom": "25.0.1"
+  }
+}
